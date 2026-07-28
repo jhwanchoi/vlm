@@ -2,7 +2,18 @@
 # strad32 부팅 후 점검 스크립트. 서버에서 실행: bash healthcheck.sh
 # 모든 항목 PASS면 vLLM 스모크 테스트(serve-smoke.sh) 진행 가능.
 
+# 드라이버 버전 기준 (docs/03 소프트웨어 스택 표)
+#   최소 575  - open kernel module + SM120 경로. 575.57+ 에서 vLLM 성능이 확연히 향상
+#   권장 595+ - 안정 브랜치. 필수 아니므로 INFO 로만 안내
+MIN_DRIVER=575
+REC_DRIVER=595
+
 pass=0; fail=0
+
+ver_ge() { # ver_ge <버전> <기준> : 버전 >= 기준 이면 참
+  [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]
+}
+
 check() { # check <이름> <명령> <기대 패턴>
   local name="$1" cmd="$2" expect="$3"
   local out
@@ -20,7 +31,25 @@ check() { # check <이름> <명령> <기대 패턴>
 echo "=== 1. NVIDIA 드라이버 ==="
 check "nvidia-smi 동작 (mismatch 해소)" "nvidia-smi --query-gpu=count --format=csv,noheader | head -1" "^[0-9]"
 check "GPU 8장 인식" "nvidia-smi -L | wc -l" "^8$"
-check "커널 모듈 버전 = 580.159" "cat /proc/driver/nvidia/version | head -1" "580\.159"
+# 드라이버 버전을 세 곳에서 읽는다. 특정 버전과의 일치가 아니라
+#   (a) 최소 버전 충족  (b) 세 값의 정합  (c) open module 여부  를 본다.
+# (b)가 깨진 상태 = 드라이버 갱신 후 재부팅 전 -> nvidia-smi 가 죽는 전형적 사고.
+drv_loaded=$(head -1 /proc/driver/nvidia/version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)  # 로드된 커널 모듈
+drv_ondisk=$(modinfo -F version nvidia 2>/dev/null)                                                          # 디스크의 모듈
+drv_nvml=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1)                 # 사용자공간 (NVML)
+
+if [ -n "$drv_loaded" ] && ver_ge "$drv_loaded" "$MIN_DRIVER"; then r=ok; else r=ng; fi
+check "드라이버 >= ${MIN_DRIVER} (docs/03)" "echo \"$r (실측 ${drv_loaded:-?})\"" "^ok"
+
+if [ -n "$drv_loaded" ] && [ "$drv_loaded" = "$drv_ondisk" ] && [ "$drv_loaded" = "$drv_nvml" ]; then r=ok; else r=ng; fi
+check "드라이버 정합 (로드=디스크=NVML)" \
+  "echo \"$r (로드 ${drv_loaded:-?} / 디스크 ${drv_ondisk:-?} / NVML ${drv_nvml:-?})\"" "^ok"
+
+check "open kernel module (docs/03 필수)" "head -1 /proc/driver/nvidia/version" "Open Kernel Module"
+
+if [ -n "$drv_loaded" ] && ! ver_ge "$drv_loaded" "$REC_DRIVER"; then
+  echo "INFO  드라이버 $drv_loaded - docs/03 권장 안정 브랜치는 ${REC_DRIVER}+ (필수 아님)"
+fi
 
 echo "=== 2. GPU 상세 (기록용) ==="
 nvidia-smi --query-gpu=index,name,memory.total,pcie.link.gen.max,pcie.link.width.max,driver_version --format=csv,noheader
