@@ -46,7 +46,12 @@ check "kubelet 프로세스 없음" "pgrep -c kubelet || echo 0" "^0$"
 echo "=== 5. 시스템 ==="
 check "swap 꺼짐" "free | awk '/Swap/{print \$2}'" "^0$"
 check "NUMA 2노드" "numactl --hardware | grep -c '^node [01] cpus'" "^2$"
-check "docker 동작" "docker info --format ok 2>&1" "^ok$"
+# docker info --format ok 는 데몬에 접근하지 못해도 템플릿 결과 ok 를 출력하므로
+# 권한이 없는 계정에서도 통과한다. 데몬 왕복이 필요한 명령으로 확인한다.
+check "docker 데몬 접근" "docker ps -q >/dev/null 2>&1 && echo ok || echo ng" "^ok$"
+# 다음 단계인 vLLM 스모크 테스트는 --gpus 로 GPU 를 넘긴다.
+# nvidia-container-toolkit 이 런타임으로 등록되어 있어야 동작한다.
+check "docker GPU 런타임 (nvidia)" "docker info --format '{{json .Runtimes}}' 2>/dev/null" "\"nvidia\""
 
 echo
 echo "결과: PASS $pass / FAIL $fail"
