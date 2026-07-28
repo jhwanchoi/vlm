@@ -21,6 +21,7 @@ HF_CACHE="${HF_CACHE:-/data01/dmt/hf-cache}"
 CPUSET="${CPUSET:-0-15,32-47}"                   # docs/05 dst+dmt 몫 (NUMA node 0)
 MEMSET="${MEMSET:-0}"
 MEM_LIMIT="${MEM_LIMIT:-64g}"
+LB_MEM="${LB_MEM:-2g}"                            # nginx 는 가볍다. 상한만 걸어 둔다
 LB_CONF_DIR="${LB_CONF_DIR:-$(cd "$(dirname "$0")/../docker" && pwd)}"
 
 # ── 확정된 vLLM 플래그와 근거 ───────────────────────────────────────────────
@@ -81,8 +82,12 @@ up() {
   docker rm -f vlm-lb >/dev/null 2>&1 || true
   # 설정은 파일이 아니라 디렉토리로 마운트한다.
   # 파일 마운트는 inode 를 묶기 때문에 호스트에서 편집(sed -i 등)해도 컨테이너에 반영되지 않는다.
+  # LB 도 자원 제한을 명시한다. 컨테이너는 계정 cgroup slice 밖이므로(docs/05 §도커 사용 시)
+  # 가벼운 프로세스라도 배정 밖 CPU·NUMA 에서 스케줄될 수 있다.
   docker run -d --name vlm-lb --restart unless-stopped \
     --add-host=host.docker.internal:host-gateway \
+    --cpuset-cpus="$CPUSET" --cpuset-mems="$MEMSET" \
+    --memory="$LB_MEM" --memory-swap="$LB_MEM" \
     -v "$LB_CONF_DIR":/etc/nginx/conf.d:ro \
     -p "$LB_PORT":8000 nginx:alpine >/dev/null
 
