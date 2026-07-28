@@ -16,6 +16,7 @@ python examples/quickstart.py --base-url http://<STRAD32_IP>:8000/v1
 | [make_sample.py](make_sample.py) | 합성 오버레이 이미지 생성 (해상도 지정 가능) |
 | `sample_overlay.jpg` | 미리 만들어 둔 1280x720 샘플. 정답지는 `make_sample.py` 의 `GROUND_TRUTH` |
 | [prompts.md](prompts.md) | 용도별 프롬프트 예시 (inspection · 라벨 판정 · 좌표 규약 · tool calling) |
+| [curl.md](curl.md) | SDK 없이 curl 로 두드려 보기 (텍스트·이미지·스트리밍·structured output·tool calling·지표·부하) |
 
 ## 접속 정보
 
