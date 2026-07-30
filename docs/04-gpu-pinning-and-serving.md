@@ -1,26 +1,43 @@
 # 04. GPU 핀닝 & 서빙 토폴로지
 
-- 작성: 2026-07-22, 갱신: 2026-07-27 (첫 가동 절차 추가)
+- 작성: 2026-07-22, 갱신: 2026-07-30 (DP=2 가동 완료, 실측 반영)
 - 원본 리서치: [research/2026-07-22-brief-deployment.md](research/2026-07-22-brief-deployment.md)
+
+## 0. 현재 가동 상태 (2026-07-30)
+
+| | |
+|---|---|
+| 공개 주소 | `http://${STRAD32_IP}:8000/v1` (nginx LB) · model `qwen36-35b-a3b` · 인증 없음 |
+| 레플리카 | `vlm-r0` (GPU 0, :8001) · `vlm-r1` (GPU 1, :8002). GPU 2-3 유휴 (실험 여유분) |
+| 이미지 | `local-vlm/vllm:v0.24.0-dmt` (`docker/Dockerfile`) |
+| 기동 | `scripts/serve.sh up` — 몫 규칙은 `scripts/serve.sh preflight` 로 사전 검사 |
+| 용량 | 레플리카당 KV 3.14 GiB = 270,767 tokens, 32K 요청 기준 동시성 8.26x ([02 실측 표](02-model-candidates.md#가동-검증-게이트-서빙-직후-실측-5항목)) |
+
+`:8001`/`:8002` 직결은 지표 조회·디버깅 전용. 클라이언트는 항상 `:8000`.
+레플리카에 직접 붙으면 분배도 폴백도 없다.
 
 ## 1. 공용 모델 첫 가동 절차
 
 확정 모델 Qwen3.6-35B-A3B NVFP4 ([02](02-model-candidates.md))를 dmt 계정으로 가동한다.
 dmt가 서버를 소유·운영하고 dst는 API 클라이언트로 접속한다 ([01](01-project-overview.md) 공용 몫 관례).
 
-| 단계 | 내용 | 도구 |
-|---|---|---|
-| 1 | 모델 다운로드. dmt 계정, 캐시는 `/data01/dmt/hf-cache` (로그인 시 자동 설정) | `scripts/download-models.sh` |
-| 2 | 단일 레플리카 기동 (GPU 0, 포트 8001). 플래그는 [08 8번 플래그 스택](08-optimization-catalog.md#8-권장-플래그-스택-초안) + tool calling 3종(`--reasoning-parser qwen3 --tool-call-parser qwen3_coder --enable-auto-tool-choice`) | docker + vLLM 0.20.2+ (cu130) |
-| 3 | 스모크: 텍스트 요청, 이미지 요청, tool call 왕복 각 1회 | `scripts/serve-smoke-test.sh` 패턴 |
-| 4 | 가동 검증 게이트 5항목 실측 (NVFP4 OCR, prefix cache, bbox 좌표, DST 골든셋, vision+tool 동시) | [02 게이트 표](02-model-candidates.md#가동-검증-게이트-서빙-직후-실측-5항목) |
-| 5 | DP 확장: 우선 레플리카 2개 (GPU 0-1) + 앞단 LB, 포트 8000. 남는 2장(GPU 2-3)은 실험 여유분 | 아래 3번 토폴로지 (C)안 또는 (B)안 |
-| 6 | 두 팀 공개: dst는 `http://${STRAD32_IP}:8000/v1` 접속 확인 | OpenAI 호환 클라이언트 |
+| 단계 | 내용 | 도구 | 상태 (2026-07-30) |
+|---|---|---|---|
+| 1 | 모델 다운로드. dmt 계정, 캐시는 `/data01/dmt/hf-cache` (로그인 시 자동 설정) | `scripts/download-models.sh` | **완료** (35G) |
+| 2 | 단일 레플리카 기동 (GPU 0, 포트 8001). 플래그는 [08 8번 플래그 스택](08-optimization-catalog.md#8-플래그-스택-실측-확정) + tool calling 3종(`--reasoning-parser qwen3 --tool-call-parser qwen3_coder --enable-auto-tool-choice`) | docker + vLLM **0.24.0** (cu130) | **완료** |
+| 3 | 스모크: 텍스트 요청, 이미지 요청, tool call 왕복 각 1회 | `examples/quickstart.py`, `examples/curl.md` | **완료** (tool call 왕복은 미실행) |
+| 4 | 가동 검증 게이트 5항목 실측 (NVFP4 OCR, prefix cache, bbox 좌표, DST 골든셋, vision+tool 동시) | [02 게이트 표](02-model-candidates.md#가동-검증-게이트-서빙-직후-실측-5항목) | 게이트 2만 완료 |
+| 5 | DP 확장: 우선 레플리카 2개 (GPU 0-1) + 앞단 LB, 포트 8000. 남는 2장(GPU 2-3)은 실험 여유분 | 아래 3번 토폴로지 (C)안 | **완료** (nginx `least_conn` + `zone`) |
+| 6 | 두 팀 공개: dst는 `http://${STRAD32_IP}:8000/v1` 접속 확인 | OpenAI 호환 클라이언트 | **완료** |
 
 - 게이트 4(DST 골든셋)는 DST의 라벨 데이터가 필요하므로 나머지 게이트와 병렬로 준비한다
 - 포트는 dst+dmt 몫 규칙(8xxx)을 따른다 ([05 공유 자원 규칙](05-strad32-team-resource-split.md#공유-자원-규칙))
 - 서빙 규모는 DP=2로 시작한다 (미팅 합의: 실험 병목 최소화).
-  배치 부하가 커지면 풀 협의 후 DP=4까지 확장
+  배치 부하가 커지면 풀 협의 후 DP=4까지 확장.
+  **DP=4 로 늘릴 때는 `MEM_LIMIT` 을 48g 이하로 내려야 한다** (64g×4 + LB 2g = 258g > 몫 225g).
+  `docker/nginx-lb.conf` 의 upstream 도 함께 늘려야 하며, 개수가 어긋나면 `serve.sh` 가 기동을 거부한다
+- **LB 주의**: nginx upstream 에 `zone` 이 없으면 워커마다 연결 카운터가 따로여서
+  동시 요청이 전부 첫 레플리카로 간다 (실측: 동시 6요청 6:0 → `zone` 추가 후 3:3)
 
 ## 2. 특정 GPU만 쓰게 하기
 

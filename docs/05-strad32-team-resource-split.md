@@ -94,6 +94,22 @@ docker run --gpus '"device=<배정 GPU UUID>"' \
   --memory=<RAM 상한> --memory-swap=<RAM 상한> --shm-size=32g ...
 ```
 
+**플래그를 빼면 격리가 아예 없다.** cgroup 이 막아주는 것은 계정 slice 안에서 도는 프로세스뿐이고,
+컨테이너와 root 로 도는 프로세스는 그 밖이다. `--cpuset-cpus` 가 없는 컨테이너는 전 코어에
+스케줄되므로 남의 몫 CPU 를 그대로 쓴다. GPU 만 배정대로 잡아도 CPU·RAM 은 새는 상태가 된다.
+
+관측 (2026-07-30, dst+dmt 서빙 실측 중):
+
+| 컨테이너 | GPU | cpuset | mems | mem 상한 | 판정 |
+|---|---|---|---|---|---|
+| `vlm-r0` / `vlm-r1` / `vlm-lb` (dst+dmt) | 0 / 1 / - | 0-15,32-47 | 0 | 64g/64g/2g | 몫 준수 |
+| `agent-llm` (vpt) | 4,5 | 16-23 | **미지정** | 112g | GPU·CPU 는 몫, NUMA 미지정 |
+| `scene-alt-*` (dpt) | 6 | **미지정** | **미지정** | **무제한** | CPU·RAM 격리 없음 |
+
+`scene-alt-*` 같은 무제한 컨테이너가 돌면 dst+dmt 몫 코어(0-15,32-47)에도 스케줄되므로,
+**서빙 처리량·TTFT 측정값이 오염된다.** 성능 측정 시에는 `docker ps` 로 타 팀 컨테이너의
+`--cpuset-cpus` 유무와 `load average` 를 함께 기록할 것 (측정 당시 load average 12.7).
+
 ### 공유 자원 규칙
 
 | 자원 | 규칙 |

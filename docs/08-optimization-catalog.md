@@ -152,22 +152,52 @@ structured output과 spec decode는 V1에서 정합.
   야간 배치/주간 인터랙티브 교대 운영
 - 워밍업 위생: (스키마, 이미지 버킷)별 1요청 워밍 후 측정
 
-## 8. 권장 플래그 스택 초안
+## 8. 플래그 스택 (실측 확정)
+
+**단일 원본은 `scripts/serve.sh` 의 `VLLM_ARGS` 다.** 아래는 그 값과 근거이며,
+바꾸려면 serve.sh 주석의 근거를 먼저 읽을 것. 2026-07-28 strad32 실측으로 확정.
 
 ```bash
-# 배치 엔드포인트 - DP 레플리카 (Qwen3.6-35B-A3B NVFP4, GPU당 1개 × N, N = 팀 몫)
-CUDA_VISIBLE_DEVICES=0 vllm serve <model-nvfp4> \
-  --mm-encoder-tp-mode data \
-  --compilation-config '{"cudagraph_mm_encoder": true}' \
-  --max-num-batched-tokens 32768 \
-  --max-num-seqs 32 \                        # hybrid Mamba cache 캡
+# 배치 엔드포인트 - DP 레플리카 (Qwen3.6-35B-A3B NVFP4, GPU당 1개 × N)
+# 컨테이너 레벨에서 UUID 로 핀하므로 CUDA_VISIBLE_DEVICES 는 쓰지 않는다 (docs/04 §2)
+vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
+  --served-model-name qwen36-35b-a3b \
+  --gpu-memory-utilization 0.95 \            # 0.90 은 기동 실패 (KV -1.09 GiB)
+  --max-model-len 32768 \
+  --max-num-seqs 16 \                        # hybrid Mamba cache 캡
+  --max-num-batched-tokens 16384 \           # 스텝 활성화 피크를 낮춰 KV 여유 확보
   --disable-chunked-mm-input \
   --mm-processor-cache-gb 0 \
-  --kv-cache-dtype fp8 \                     # 정확도 게이트 통과 후
-  --limit-mm-per-prompt '{"image": 5}' \     # 쿼리 1 + few-shot 4
-  --reasoning-parser qwen3 --tool-call-parser qwen3_coder --enable-auto-tool-choice \
-  -O3 --port 8001
-# 나머지 GPU 동일 반복, 앞단 LB (LiteLLM least-busy / nginx least_conn)
+  --limit-mm-per-prompt '{"image": 4}' \
+  --reasoning-parser qwen3 --tool-call-parser qwen3_coder --enable-auto-tool-choice
+# 나머지 GPU 동일 반복, 앞단 LB = nginx least_conn + zone (docker/nginx-lb.conf)
+```
+
+초안 대비 변경점과 이유:
+
+| 항목 | 초안 | 확정 | 이유 |
+|---|---|---|---|
+| `--gpu-memory-utilization` | 미지정 | **0.95** | 가중치 23.25 GiB 실측. 0.90 이면 `Available KV cache memory: -1.09 GiB` 로 ValueError |
+| `--max-num-batched-tokens` | 32768 | **16384** | 스텝 활성화 피크 축소 → KV 여유. 이미지 1장(약 9.4K)은 여전히 한 청크에 들어간다 |
+| `--max-num-seqs` | 32 | **16** | Mamba cache 블록 한정. KV 3.14 GiB 로는 32 를 지탱하지 못한다 |
+| `--kv-cache-dtype fp8` | 있음 | **제외** | 가동 검증 게이트 1(NVFP4 정확도)과 교락. 게이트 통과 후 별도 A/B |
+| `--limit-mm-per-prompt` | image: 5 | **image: 4** | 단, 4464x2160 프레임은 9.4K 토큰이므로 32K 컨텍스트에는 **실제 3장**까지. few-shot 이미지는 크롭/다운스케일 전제 |
+| `-O3`, `--mm-encoder-tp-mode data`, `cudagraph_mm_encoder` | 있음 | **미적용** | 아직 미검증. 기본 설정으로 먼저 가동선을 확보했다. 최적화 Phase 에서 A/B 대상 |
+| MoE FP4 env (`VLLM_USE_FLASHINFER_MOE_FP4` 등) | — | **불필요** | vLLM 0.24.0 이 FLASHINFER_CUTLASS NvFp4 MoE 백엔드를 자동 선택 (실측) |
+
+가동 후 용량 실측 (레플리카 1개 = GPU 1장):
+
+| 항목 | 값 |
+|---|---|
+| KV 캐시 | 3.14 GiB = **270,767 tokens** |
+| 최대 동시성 | 32K 요청 기준 **8.26x** (`--max-num-seqs 16` 보다 작다 → 긴 요청 몰리면 preemption) |
+| VRAM | 29.85 / 32.6 GiB (여유 약 2.7 GiB) |
+| prefix cache | **자동 비활성** (`prefix_cache_queries_total` = 0 고정) |
+
+- **다음 최적화 후보 1순위**: vLLM 0.21+ 는 CUDA graph 메모리도 프로파일에 포함하므로 `0.95` 의 실효는 `0.9347`.
+  엔진이 로그로 `0.9653` 을 권고한다. KV 를 키우려면 여기부터 A/B (부하 중 활성화 피크와 상충하므로 실측 필수)
+- 참고: block-wise FP8 체크포인트를 쓸 때는 `VLLM_USE_DEEP_GEMM=0` 이 필요하다.
+  DeepGEMM 이 SM120 의 scale factor 레이아웃을 몰라 `Unknown SF transformation` 으로 엔진이 죽는다. 현재 NVFP4 라 해당 없음
 
 # 큰 모델 단일 엔진 대안 (122B AWQ 등)
 vllm serve <model> --tensor-parallel-size 4 ...   # TP2×PP2도 A/B

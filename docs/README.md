@@ -4,8 +4,10 @@
 svnet3 추론 결과 시각화 이미지의 자동 visual inspection agent와
 DST 라벨 누락 객체 탐지(Bedrock 마이그레이션)를 만드는 프로젝트.
 
-- 상태 (2026-07-27): 서버 셋업·검증 완료, **공용 모델 Qwen3.6-35B-A3B NVFP4 확정.
-  현재 단계는 서빙 가동** ([04 1번](04-gpu-pinning-and-serving.md#1-공용-모델-첫-가동-절차))
+- 상태 (2026-07-30): **공용 모델 서빙 가동 완료.** Qwen3.6-35B-A3B NVFP4 × DP=2 (GPU 0-1),
+  앞단 nginx LB, 공개 주소 `http://${STRAD32_IP}:8000/v1`, model `qwen36-35b-a3b`
+  ([04 0번 현재 가동 상태](04-gpu-pinning-and-serving.md#0-현재-가동-상태-2026-07-30)).
+  다음 단계는 가동 검증 게이트 잔여 4항목 + DST 골든셋 ([02 실측 현황](02-model-candidates.md#가동-검증-게이트-서빙-직후-실측-5항목))
 - 고정 제약: **서버 strad32 1대 (스케일아웃 없음)** · GeForce P2P 차단 · svnet3 소스 보안 정책상 접근 불가 ·
   모델 학습(fine-tuning) 범위 외
 - 용어: 문서 내 "NUMA 노드"는 서버 내부의 CPU 소켓별 메모리 구역 (1대 안에 2개). 서버 대수와 무관.
@@ -40,11 +42,14 @@ DST 라벨 누락 객체 탐지(Bedrock 마이그레이션)를 만드는 프로�
 | [research/](research/) | 원본 리서치 브리프 (출처 포함, 수정 금지) |
 | [policy/](policy/) | 정책 문서 보관소: 도메인별 하위 폴더 (현재 [inspection/](policy/inspection/) 수신 대기) |
 | [../samples/](../samples/) | 입력 샘플 이미지 (svnet3 추론 결과 스크린샷 등) |
-| [../scripts/](../scripts/) | healthcheck, 모델 다운로드, 서빙 스모크 테스트 |
+| [../scripts/](../scripts/) | `healthcheck.sh` 부팅 후 점검 · `download-models.sh` · **`serve.sh` 기동/정지/preflight** · `serve-smoke-test.sh` |
+| [../docker/](../docker/) | `Dockerfile` (dmt 사용자 내장 vLLM 파생 이미지) · `nginx-lb.conf` (LB 설정) |
+| [../examples/](../examples/) | 클라이언트 예제: `quickstart.py` · `curl.md` · `prompts.md` · 합성 샘플 생성 |
 
 ## 읽는 순서
 
 - 처음 온 사람: README → 01 → 02
-- 서빙 가동 담당: 04 → 02 → 08
+- 서빙 가동 담당: 04 → 02 → 08 → `scripts/serve.sh`
+- 서빙 쓰는 사람(dst 등): [../examples/](../examples/) 만 보면 된다
 - 서버 셋업 담당: 05 → 04 → 03
 - agent 구현 담당: 06 → 02 → 07 → 08

@@ -45,7 +45,7 @@ DST 용도에서 모델의 역할 범위(단독 탐지까지 가능한가, 판�
 
 | 구성 | GPU 점유 (4장 풀 기준) | 판정 |
 |---|---|---|
-| **Qwen3.6-35B-A3B NVFP4** | 가중치 약 20GB, 1장/레플리카. DP=1-4 탄력 운영 | **적정.** 세 용도 전부 커버, 레플리카 수로 규모 조절 가능, 풀 독점 없음. 인식 품질은 vision encoder가 dense라 27B와 동급 |
+| **Qwen3.6-35B-A3B NVFP4** | 가중치 **23.25GiB 실측**(순수 NVFP4가 아닌 MIXED_PRECISION 체크포인트라 추정치 20GB보다 크다), 1장/레플리카. DP=1-4 탄력 운영 | **적정.** 세 용도 전부 커버, 레플리카 수로 규모 조절 가능, 풀 독점 없음. 인식 품질은 vision encoder가 dense라 27B와 동급 |
 | Qwen3.6-27B NVFP4 | 약 16GB, 1장/레플리카 | 적정 대안. 종합 추론 품질 상향, 처리량 하향. 게이트 4b 미달 시 교체 |
 | Qwen3.5-122B-A10B AWQ | TP=4, 풀 전체 독점 | 상시 운영은 과함. 다른 실험 공존 불가. 저신뢰 건 에스컬레이션 단발 실행만 |
 | GLM-4.6V AWQ | TP=2 이상 (가중치 약 55-60GB) | 과함 + 서빙 리스크 (아래 Agentic 축). 비교군만 |
@@ -99,12 +99,33 @@ DST 용도에서 모델의 역할 범위(단독 탐지까지 가능한가, 판�
 | 4 | DST 골든셋 실측 | 누락 라벨을 아는 프레임 50-100장에서 (a) VLM 단독 마이닝 recall, (b) 후보 crop 참/거짓 판정 정밀도 측정 | (a) 미달 시 사이드카 detector 도입, (b) 미달 시 27B 승격 또는 122B 에스컬레이션 |
 | 5 | vision + tool calling 동시 동작 | vLLM `--tool-call-parser qwen3_coder`로 이미지 입력 + tool call 왕복 | 파서 교체 (qwen3_xml) 후 재시도 |
 
+실측 현황 (2026-07-30, DP=2 가동 후):
+
+| 게이트 | 상태 | 실측 내용 |
+|---|---|---|
+| 1 NVFP4 OCR | **미실측** | 합성 오버레이(1280x720)는 정상 판독. BF16/FP8 대비 비교는 아직 |
+| 2 prefix caching | **완료 — 비활성 확정** | `enable_prefix_caching=False` 자동 선택. `vllm:prefix_cache_queries_total` = 0 고정, 엔진 로그 `Prefix cache hit rate: 0.0%`. → 처리량 재산정 필요, 캐시 인지 라우팅(sglang_router 등) 무의미 |
+| 3 bbox 좌표 규약 | 미실측 | |
+| 4 DST 골든셋 | 미실측 | DST 라벨 데이터 대기 |
+| 5 vision + tool | 미실측 | 절차는 [examples/curl.md 5번](../examples/curl.md) 에 준비됨 |
+
+가동 후 확정된 서빙 용량 (레플리카 1개 = GPU 1장):
+
+| 항목 | 실측 |
+|---|---|
+| KV 캐시 | **3.14 GiB = 270,767 tokens** |
+| 최대 동시성 | 32,768 토큰 요청 기준 **8.26x** (`--max-num-seqs 16` 보다 작다 → 긴 요청이 몰리면 preemption) |
+| VRAM 사용 | 29.85 / 32.6 GiB (`--gpu-memory-utilization 0.95`) |
+| 이미지 상한 실제 | 4464x2160 프레임은 9.4K 토큰 → `--max-model-len 32768` 에 **최대 3장**. `--limit-mm-per-prompt {"image": 4}` 는 다운스케일/크롭 전제 |
+
 ## Qwen3.6 서빙 노트
 
 - **NVFP4 체크포인트**: unsloth 35B-A3B-NVFP4 + NVIDIA 공식, 27B 커뮤니티
   (5090 + CUDA 13.2 + vLLM 0.20.2 동작 확인). BF16 대비 noise 수준 주장.
   SM120에선 AWQ보다 **NVFP4가 4bit 정석**. FP8은 35B가 1장에 안 들어가므로 배치 목적에는 비추천.
 - vLLM **0.20.2+ (cu130)** 권장, FlashInfer (시스템 CUDA 13 toolkit 필요).
+  **가동 실측: `vllm/vllm-openai:v0.24.0` 파생 이미지로 운영 중** (`docker/Dockerfile`).
+  0.24.0 은 FLASHINFER_CUTLASS NvFp4 MoE 백엔드를 자동 선택하므로 관련 env 플래그를 넣지 않아도 된다.
 - **Hybrid 주의 3종** (실제 보고된 문제):
   1. Mamba cache 블록 한정 → `--max-num-seqs` 캡 필수 (16-32 시작)
   2. prefix caching이 GDN 레이어에서 experimental → 실동작 검증

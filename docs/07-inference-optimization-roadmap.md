@@ -18,7 +18,7 @@
 ## Phase 0: 베이스라인
 
 확정 모델 Qwen3.6-35B-A3B NVFP4, GPU당 1레플리카
-(첫 가동 구성 = [04 1번](04-gpu-pinning-and-serving.md#1-공용-모델-첫-가동-절차) + [08 8번 플래그 스택](08-optimization-catalog.md#8-권장-플래그-스택-초안)).
+(첫 가동 구성 = [04 1번](04-gpu-pinning-and-serving.md#1-공용-모델-첫-가동-절차) + [08 8번 플래그 스택](08-optimization-catalog.md#8-플래그-스택-실측-확정)).
 frozen 평가셋 + 벤치 1회 → 이후 모든 단계는 이 대비 diff.
 BF16 대비 품질 확인은 가동 검증 게이트 1번(단발 TP=4 실행)에서 수행 ([02](02-model-candidates.md)).
 
@@ -31,6 +31,15 @@ BF16 대비 품질 확인은 가동 검증 게이트 1번(단발 TP=4 실행)에
 | 3 | **오프라인 배치 + 스케줄러 튜닝** | `LLM.generate`/`LLM.chat`, `max_num_batched_tokens` 8K-64K 스윕, `max_num_seqs` |
 | 4 | **DP vs TP A/B** | 레플리카가 P2P 없는 박스에서 실측 ~2.8× (4×5090) |
 | 4b | **Encoder 플래그 2종** | `--mm-encoder-tp-mode data` (10-45%) + ViT CUDA graphs. 무위험. [08 2번](08-optimization-catalog.md#2-vlm-특화-기법) |
+| 5 | **`--gpu-memory-utilization` 0.95 → 0.96-0.965** | 가동 실측 KV 가 3.14 GiB(270,767 tokens)뿐. 엔진이 로그로 0.9653 을 권고. 동시성 상한을 직접 올린다 |
+
+Phase 1 을 시작하기 전에 알아야 할 가동 실측 ([08 8번](08-optimization-catalog.md#8-플래그-스택-실측-확정)):
+
+- **prefix caching 은 자동 비활성**(게이트 2 확정). 위 2번은 "히트율 검증"이 아니라
+  "캐시를 켤 수 있는가"부터 확인해야 하며, 현재 전제로는 few-shot prefix 절감 효과가 0이다
+- **32K 컨텍스트에 4464x2160 프레임은 3장까지.** few-shot 이미지를 쓰려면 1번(해상도 사다리)이 선행 조건이다
+- 측정 시 타 팀의 `--cpuset-cpus` 없는 컨테이너가 우리 코어에 끼어들 수 있다
+  ([05 도커 사용 시](05-strad32-team-resource-split.md#도커-사용-시)). load average 를 함께 기록할 것
 
 주의: 과거 고동시성 MM prefix 캐시 정합성 버그(#20261) 이력. 타깃 동시성에서 출력 스팟체크.
 chunked prefill은 V1 기본이라 대개 건드릴 필요 없음.
