@@ -2,3 +2,4 @@
 .env
 samples/
 __pycache__/
+stress/assets/
