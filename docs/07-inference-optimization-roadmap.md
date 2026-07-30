@@ -31,13 +31,16 @@ BF16 대비 품질 확인은 가동 검증 게이트 1번(단발 TP=4 실행)에
 | 3 | **오프라인 배치 + 스케줄러 튜닝** | `LLM.generate`/`LLM.chat`, `max_num_batched_tokens` 8K-64K 스윕, `max_num_seqs` |
 | 4 | **DP vs TP A/B** | 레플리카가 P2P 없는 박스에서 실측 ~2.8× (4×5090) |
 | 4b | **Encoder 플래그 2종** | `--mm-encoder-tp-mode data` (10-45%) + ViT CUDA graphs. 무위험. [08 2번](08-optimization-catalog.md#2-vlm-특화-기법) |
-| 5 | **`--gpu-memory-utilization` 0.95 → 0.96-0.965** | 가동 실측 KV 가 3.14 GiB(270,767 tokens)뿐. 엔진이 로그로 0.9653 을 권고. 동시성 상한을 직접 올린다 |
+| 5 | **`--gpu-memory-utilization` 0.95 → 0.96-0.965** | KV 가 3.14 GiB(270,767 tokens)뿐. 엔진이 로그로 0.9653 을 권고. 단 부하 실측에서 KV 는 64퍼센트만 찼으므로 6번보다 뒤다 |
+| 6 | **`--max-num-seqs` 16 → 24 또는 32** | 부하 실측 1순위. `running` 이 32(16×2) 상한에 닿고 KV 는 남았다. preemption 0 ([09 6번](09-stress-test-results.md#6-병목은-kv가-아니라-max-num-seqs)) |
 
 Phase 1 을 시작하기 전에 알아야 할 가동 실측 ([08 8번](08-optimization-catalog.md#8-플래그-스택-실측-확정)):
 
 - **prefix caching 은 자동 비활성**(게이트 2 확정). 위 2번은 "히트율 검증"이 아니라
   "캐시를 켤 수 있는가"부터 확인해야 하며, 현재 전제로는 few-shot prefix 절감 효과가 0이다
 - **32K 컨텍스트에 4464x2160 프레임은 3장까지.** few-shot 이미지를 쓰려면 1번(해상도 사다리)이 선행 조건이다
+- **해상도가 처리량을 지배한다(실측).** 동시 16에서 텍스트 1885 tok/s, 1MP 1614 tok/s, native 206 tok/s.
+  1MP 까지는 사실상 공짜이고 native 는 처리량을 1/9 로 떨어뜨린다 ([09 5번](09-stress-test-results.md#5-해상도가-처리량을-지배한다))
 - 측정 시 타 팀의 `--cpuset-cpus` 없는 컨테이너가 우리 코어에 끼어들 수 있다
   ([05 도커 사용 시](05-strad32-team-resource-split.md#도커-사용-시)). load average 를 함께 기록할 것
 

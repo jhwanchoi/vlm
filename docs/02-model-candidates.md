@@ -118,6 +118,12 @@ DST 용도에서 모델의 역할 범위(단독 탐지까지 가능한가, 판�
 | VRAM 사용 | 29.85 / 32.6 GiB (`--gpu-memory-utilization 0.95`) |
 | 이미지 상한 실제 | 4464x2160 프레임은 9.4K 토큰 → `--max-model-len 32768` 에 **최대 3장**. `--limit-mm-per-prompt {"image": 4}` 는 다운스케일/크롭 전제 |
 
+부하 실측으로 확인된 실제 병목은 KV 가 아니다 ([09](09-stress-test-results.md)).
+동시 64까지 밀어도 KV 사용률은 최대 64퍼센트, preemption 은 0이었다. `running` 이
+`--max-num-seqs 16` × 레플리카 2 = 32 에서 멈추고 초과분이 전부 큐로 쌓인다.
+"최대 동시성 8.26x" 는 32K 컨텍스트를 꽉 채운 요청 기준이며, 실제 요청(1K-10K 토큰)에는
+과하게 보수적인 수치다. 따라서 `--max-num-seqs` 상향이 다음 A/B 1순위다.
+
 ## Qwen3.6 서빙 노트
 
 - **NVFP4 체크포인트**: unsloth 35B-A3B-NVFP4 + NVIDIA 공식, 27B 커뮤니티

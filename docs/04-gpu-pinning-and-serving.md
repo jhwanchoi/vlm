@@ -11,7 +11,7 @@
 | 레플리카 | `vlm-r0` (GPU 0, :8001) · `vlm-r1` (GPU 1, :8002). GPU 2-3 유휴 (실험 여유분) |
 | 이미지 | `local-vlm/vllm:v0.24.0-dmt` (`docker/Dockerfile`) |
 | 기동 | `scripts/serve.sh up` — 몫 규칙은 `scripts/serve.sh preflight` 로 사전 검사 |
-| 용량 | 레플리카당 KV 3.14 GiB = 270,767 tokens, 32K 요청 기준 동시성 8.26x ([02 실측 표](02-model-candidates.md#가동-검증-게이트-서빙-직후-실측-5항목)) |
+| 용량 | 레플리카당 KV 3.14 GiB = 270,767 tokens. 부하 실측 상한 **720 출력 tok/s, 포화점 동시 16, 권고 동시성 11** ([09](09-stress-test-results.md)) |
 
 `:8001`/`:8002` 직결은 지표 조회·디버깅 전용. 클라이언트는 항상 `:8000`.
 레플리카에 직접 붙으면 분배도 폴백도 없다.

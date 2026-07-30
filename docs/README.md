@@ -8,6 +8,7 @@ DST 라벨 누락 객체 탐지(Bedrock 마이그레이션)를 만드는 프로�
   앞단 nginx LB, 공개 주소 `http://${STRAD32_IP}:8000/v1`, model `qwen36-35b-a3b`
   ([04 0번 현재 가동 상태](04-gpu-pinning-and-serving.md#0-현재-가동-상태-2026-07-30)).
   다음 단계는 가동 검증 게이트 잔여 4항목 + DST 골든셋 ([02 실측 현황](02-model-candidates.md#가동-검증-게이트-서빙-직후-실측-5항목))
+- 서빙 용량 (2026-07-30 실측): **최대 720 출력 tok/s, 포화점 동시 16, 권고 동시성 11, DP=2 효율 1.95배** ([09](09-stress-test-results.md))
 - 고정 제약: **서버 strad32 1대 (스케일아웃 없음)** · GeForce P2P 차단 · svnet3 소스 보안 정책상 접근 불가 ·
   모델 학습(fine-tuning) 범위 외
 - 용어: 문서 내 "NUMA 노드"는 서버 내부의 CPU 소켓별 메모리 구역 (1대 안에 2개). 서버 대수와 무관.
@@ -39,17 +40,19 @@ DST 라벨 누락 객체 탐지(Bedrock 마이그레이션)를 만드는 프로�
 | [06-inspection-agent-design.md](06-inspection-agent-design.md) | 프롬프트 구조, 이미지 전처리, structured output, 평가 |
 | [07-inference-optimization-roadmap.md](07-inference-optimization-roadmap.md) | 최적화 실험 로드맵 (Phase 0-4, 실행 순서) |
 | [08-optimization-catalog.md](08-optimization-catalog.md) | 최적화 기법 전체 카탈로그 (SM120 판정표, skip/watch 목록) |
+| [09-stress-test-results.md](09-stress-test-results.md) | **[실측]** 부하 테스트 결과: 처리량 상한, 포화점, DP 효율, 해상도 영향, 병목 판정 |
 | [research/](research/) | 원본 리서치 브리프 (출처 포함, 수정 금지) |
 | [policy/](policy/) | 정책 문서 보관소: 도메인별 하위 폴더 (현재 [inspection/](policy/inspection/) 수신 대기) |
 | [../samples/](../samples/) | 입력 샘플 이미지 (svnet3 추론 결과 스크린샷 등) |
 | [../scripts/](../scripts/) | `healthcheck.sh` 부팅 후 점검 · `download-models.sh` · **`serve.sh` 기동/정지/preflight** · `serve-smoke-test.sh` |
 | [../docker/](../docker/) | `Dockerfile` (dmt 사용자 내장 vLLM 파생 이미지) · `nginx-lb.conf` (LB 설정) |
 | [../examples/](../examples/) | 클라이언트 예제: `quickstart.py` · `curl.md` · `prompts.md` · 합성 샘플 생성 |
+| [../stress/](../stress/) | Locust 부하 테스트 하네스 (몫 preflight, 자동 중단 가드, 집계) |
 
 ## 읽는 순서
 
 - 처음 온 사람: README → 01 → 02
-- 서빙 가동 담당: 04 → 02 → 08 → `scripts/serve.sh`
+- 서빙 가동 담당: 04 → 02 → 08 → 09 → `scripts/serve.sh`
 - 서빙 쓰는 사람(dst 등): [../examples/](../examples/) 만 보면 된다
 - 서버 셋업 담당: 05 → 04 → 03
 - agent 구현 담당: 06 → 02 → 07 → 08

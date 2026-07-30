@@ -77,11 +77,9 @@ def agg_stage(rows, stage):
     totals = per_name(rows, stage, "total")
     ttfts = per_name(rows, stage, "TTFT")
 
-    rps = 0.0
     p95s, names = [], {}
     req_delta = fail_delta = 0
     for name, rs in totals.items():
-        rps += statistics.fmean(fnum(r.get("Requests/s")) for r in rs)
         p95 = [fnum(r.get("95%")) for r in rs if fnum(r.get("95%")) > 0]
         p50 = [fnum(r.get("50%")) for r in rs if fnum(r.get("50%")) > 0]
         if p95:
@@ -106,8 +104,9 @@ def agg_stage(rows, stage):
             "p95": max(p95) if p95 else 0.0,
         }
 
+    span = max(1, stage["win_end"] - stage["win_start"])
     return {
-        "rps": rps,
+        "rps": req_delta / span,
         "p95": max(p95s) if p95s else 0.0,
         "requests": req_delta,
         "failures": fail_delta,
@@ -163,19 +162,21 @@ def system_stage(gpu_rows, host_rows, stage, ours, others):
 
 
 def verdicts(table):
+    """포화점은 전역 최대 처리량의 90퍼센트에 처음 도달하는 단계로 본다.
+
+    이전 단계 대비 증가율로 판정하면 단계별 노이즈에 걸린다 (실측: 동시 12에서
+    -6.9퍼센트 딥이 났지만 24에서 처리량이 더 올라갔다). 전역 최대 대비로 보면
+    "더 올려도 남는 게 없는 지점"이 안정적으로 잡힌다.
+    """
+    peak = max((r["eng"]["tok_s"] for r in table), default=0.0)
     knee = knee_note = None
-    for prev, cur in zip(table, table[1:]):
-        if prev["eng"]["tok_s"] <= 0:
-            continue
-        growth = (cur["eng"]["tok_s"] - prev["eng"]["tok_s"]) / prev["eng"]["tok_s"] * 100
-        lat = (cur["cli"]["p95"] / prev["cli"]["p95"]) if prev["cli"]["p95"] else 0
-        if growth < 10 and lat > 1.5:
-            knee, knee_note = prev["users"], f"처리량 증가 {growth:.1f}%, p95 {lat:.2f}배"
-            break
-        # 지연만 늘어난 것은 포화가 아니다. 폐루프 부하에서는 처리량이 크게 늘 때도
-        # 지연이 함께 늘어난다. 처리량 증가가 실제로 둔화된 경우만 후보로 본다.
-        if knee is None and growth < 20:
-            knee, knee_note = prev["users"], f"후보 (처리량 증가 {growth:.1f}%, p95 {lat:.2f}배)"
+    if peak > 0:
+        for r in table:
+            if r["eng"]["tok_s"] >= peak * 0.9:
+                knee = r["users"]
+                knee_note = (f"처리량 {r['eng']['tok_s']:.0f} tok/s = 최대 {peak:.0f} 의 "
+                             f"{r['eng']['tok_s'] / peak * 100:.0f}%, 이 지점 p95 {r['cli']['p95']:.0f}ms")
+                break
     break_pt = next((r["users"] for r in table if r["cli"]["fail_pct"] > 1.0), None)
     preempt_pt = next((r["users"] for r in table if r["eng"]["preempt"] > 0), None)
     return knee, knee_note, break_pt, preempt_pt
