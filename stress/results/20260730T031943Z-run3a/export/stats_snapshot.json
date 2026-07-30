@@ -1,0 +1,68 @@
+{
+  "current_response_time_percentiles": {
+    "response_time_percentile_0.5": null,
+    "response_time_percentile_0.95": null
+  },
+  "errors": [],
+  "fail_ratio": 0.0,
+  "state": "stopped",
+  "stats": [
+    {
+      "avg_content_length": 157.0,
+      "avg_response_time": 162.92342834054995,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 6.8,
+      "max_response_time": 257.0,
+      "median_response_time": 160.0,
+      "method": "TTFT",
+      "min_response_time": 93.0,
+      "name": "S1",
+      "num_failures": 0,
+      "num_requests": 1084,
+      "response_time_percentile_0.95": 180.0,
+      "response_time_percentile_0.99": 240.0,
+      "safe_name": "S1",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 6.042497424769735
+    },
+    {
+      "avg_content_length": 256.0,
+      "avg_response_time": 1969.108273461633,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 6.8,
+      "max_response_time": 2199.0,
+      "median_response_time": 2100.0,
+      "method": "total",
+      "min_response_time": 1651.0,
+      "name": "S1",
+      "num_failures": 0,
+      "num_requests": 1084,
+      "response_time_percentile_0.95": 2200.0,
+      "response_time_percentile_0.99": 2200.0,
+      "safe_name": "S1",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 6.042497424769735
+    },
+    {
+      "avg_content_length": 206.5,
+      "avg_response_time": 1066.0158509010914,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 13.6,
+      "max_response_time": 2199.0,
+      "median_response_time": 260.0,
+      "method": "",
+      "min_response_time": 93.0,
+      "name": "Aggregated",
+      "num_failures": 0,
+      "num_requests": 2168,
+      "response_time_percentile_0.95": 2200.0,
+      "response_time_percentile_0.99": 2200.0,
+      "safe_name": "Aggregated",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 12.08499484953947
+    }
+  ],
+  "total_fail_per_sec": 0.0,
+  "total_rps": 13.6,
+  "user_count": 0
+}

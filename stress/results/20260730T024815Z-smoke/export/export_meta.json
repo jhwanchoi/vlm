@@ -1,0 +1,6 @@
+{
+  "exported_utc": "2026-07-30T03:45:28Z",
+  "run": "smoke", "port": 8096,
+  "locust_state": "stopped",
+  "export_bytes": 1500478
+}

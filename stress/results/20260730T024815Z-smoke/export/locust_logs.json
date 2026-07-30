@@ -1,0 +1,23 @@
+{
+  "master": [
+    "[2026-07-30 02:48:20,265] 0f23d0f8e1c4/INFO/locust.main: Starting Locust 2.32.4",
+    "[2026-07-30 02:48:20,265] 0f23d0f8e1c4/WARNING/locust.main: --run-time, --users or --spawn-rate have no impact on LoadShapes unless the shape class explicitly reads them. See: docs.locust.io/en/stable/custom-load-shape.html#use-common-options",
+    "[2026-07-30 02:48:20,265] 0f23d0f8e1c4/WARNING/locust.main: The following option(s) will be ignored: --run-time",
+    "[2026-07-30 02:48:20,265] 0f23d0f8e1c4/INFO/locust.main: Starting web interface at http://0.0.0.0:8096",
+    "[2026-07-30 02:48:20,271] 0f23d0f8e1c4/INFO/locust.runners: Shape test starting.",
+    "[2026-07-30 02:48:20,277] 0f23d0f8e1c4/INFO/locust.runners: Shape worker starting",
+    "[2026-07-30 02:48:20,278] 0f23d0f8e1c4/INFO/locust.runners: Shape test updating to 1 users at 1.00 spawn rate",
+    "[2026-07-30 02:48:26,285] 0f23d0f8e1c4/INFO/locust.runners: Ramping to 1 users at a rate of 1.00 per second",
+    "[2026-07-30 02:48:26,285] 0f23d0f8e1c4/INFO/locust.runners: All users spawned: {\"VLMUser\": 1} (1 total users)",
+    "[2026-07-30 02:49:50,452] 0f23d0f8e1c4/INFO/locust.runners: Shape test updating to 4 users at 4.00 spawn rate",
+    "[2026-07-30 02:49:50,452] 0f23d0f8e1c4/INFO/locust.runners: Ramping to 4 users at a rate of 4.00 per second",
+    "[2026-07-30 02:49:50,453] 0f23d0f8e1c4/INFO/locust.runners: All users spawned: {\"VLMUser\": 4} (4 total users)",
+    "[2026-07-30 02:51:20,656] 0f23d0f8e1c4/INFO/locust.runners: Shape test stopping",
+    "[2026-07-30 02:51:20,672] 0f23d0f8e1c4/INFO/locust.main: --run-time limit reached, stopping test",
+    "[2026-07-30 02:51:20,672] 0f23d0f8e1c4/INFO/locust.main: --autoquit not specified, leaving web ui running indefinitely",
+    "[2026-07-30 02:51:20,672] 0f23d0f8e1c4/INFO/locust.main: Run time limit set to 300 seconds",
+    "[2026-07-30 02:56:20,673] 0f23d0f8e1c4/INFO/locust.main: --run-time limit reached, stopping test",
+    "[2026-07-30 02:56:20,673] 0f23d0f8e1c4/INFO/locust.main: --autoquit not specified, leaving web ui running indefinitely"
+  ],
+  "workers": {}
+}

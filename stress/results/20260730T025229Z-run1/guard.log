@@ -1,0 +1,3 @@
+2026-07-30T02:52:29Z monitor 시작 port=8089 container=vlm-stress-run1 임계: temp>83 clk-15% mem_avail<20480MB our_mem>200g load>96 5xx>20%
+2026-07-30T02:52:32Z 타 팀 GPU 클럭 기준선(busy 표본만): 4=미관측 5=미관측 6=2865 7=미관측 
+2026-07-30T02:52:35Z 컨테이너 vlm-stress-run1 확인. 감시 시작

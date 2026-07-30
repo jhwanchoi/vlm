@@ -3,7 +3,7 @@
 - 측정: 2026-07-30 02:52-03:29 UTC, strad32
 - 대상: Qwen3.6-35B-A3B NVFP4, DP=2 (GPU 0-1), nginx LB `:8000`
 - 하네스: [stress/](../stress/) · 설계: [specs/2026-07-30-vlm-stress-test-design.md](superpowers/specs/2026-07-30-vlm-stress-test-design.md)
-- 원자료: 서버 `/data01/dmt/stress-results/`
+- 원자료: [stress/results/](../stress/results/) (서버 원본은 `/data01/dmt/stress-results/`)
 
 ## 1. 결론 네 줄
 

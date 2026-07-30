@@ -1,0 +1,68 @@
+{
+  "current_response_time_percentiles": {
+    "response_time_percentile_0.5": null,
+    "response_time_percentile_0.95": null
+  },
+  "errors": [],
+  "fail_ratio": 0.0,
+  "state": "stopped",
+  "stats": [
+    {
+      "avg_content_length": 1153.0,
+      "avg_response_time": 357.0042182049508,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 6.4,
+      "max_response_time": 417.0,
+      "median_response_time": 360.0,
+      "method": "TTFT",
+      "min_response_time": 272.0,
+      "name": "S2",
+      "num_failures": 0,
+      "num_requests": 944,
+      "response_time_percentile_0.95": 390.0,
+      "response_time_percentile_0.99": 400.0,
+      "safe_name": "S2",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 5.244522177117616
+    },
+    {
+      "avg_content_length": 256.0,
+      "avg_response_time": 2259.8010576606366,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 6.4,
+      "max_response_time": 2581.0,
+      "median_response_time": 2500.0,
+      "method": "total",
+      "min_response_time": 1835.0,
+      "name": "S2",
+      "num_failures": 0,
+      "num_requests": 944,
+      "response_time_percentile_0.95": 2500.0,
+      "response_time_percentile_0.99": 2600.0,
+      "safe_name": "S2",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 5.244522177117616
+    },
+    {
+      "avg_content_length": 704.5,
+      "avg_response_time": 1308.4026379327936,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 12.8,
+      "max_response_time": 2581.0,
+      "median_response_time": 420.0,
+      "method": "",
+      "min_response_time": 272.0,
+      "name": "Aggregated",
+      "num_failures": 0,
+      "num_requests": 1888,
+      "response_time_percentile_0.95": 2500.0,
+      "response_time_percentile_0.99": 2600.0,
+      "safe_name": "Aggregated",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 10.489044354235231
+    }
+  ],
+  "total_fail_per_sec": 0.0,
+  "total_rps": 12.8,
+  "user_count": 0
+}

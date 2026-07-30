@@ -1,0 +1,68 @@
+{
+  "current_response_time_percentiles": {
+    "response_time_percentile_0.5": null,
+    "response_time_percentile_0.95": null
+  },
+  "errors": [],
+  "fail_ratio": 0.0,
+  "state": "stopped",
+  "stats": [
+    {
+      "avg_content_length": 9649.0,
+      "avg_response_time": 6709.874405420698,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 0.0,
+      "max_response_time": 14323.0,
+      "median_response_time": 5800.0,
+      "method": "TTFT",
+      "min_response_time": 2332.0,
+      "name": "S3",
+      "num_failures": 0,
+      "num_requests": 152,
+      "response_time_percentile_0.95": 14000.0,
+      "response_time_percentile_0.99": 14000.0,
+      "safe_name": "S3",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 0.9145874743721774
+    },
+    {
+      "avg_content_length": 256.0,
+      "avg_response_time": 12489.719829031903,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 0.0,
+      "max_response_time": 16291.0,
+      "median_response_time": 10000.0,
+      "method": "total",
+      "min_response_time": 8939.0,
+      "name": "S3",
+      "num_failures": 0,
+      "num_requests": 152,
+      "response_time_percentile_0.95": 16000.0,
+      "response_time_percentile_0.99": 16000.0,
+      "safe_name": "S3",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 0.9145874743721774
+    },
+    {
+      "avg_content_length": 4952.5,
+      "avg_response_time": 9599.7971172263,
+      "current_fail_per_sec": 0.0,
+      "current_rps": 0.0,
+      "max_response_time": 16291.0,
+      "median_response_time": 9000.0,
+      "method": "",
+      "min_response_time": 2332.0,
+      "name": "Aggregated",
+      "num_failures": 0,
+      "num_requests": 304,
+      "response_time_percentile_0.95": 16000.0,
+      "response_time_percentile_0.99": 16000.0,
+      "safe_name": "Aggregated",
+      "total_fail_per_sec": 0.0,
+      "total_rps": 1.8291749487443547
+    }
+  ],
+  "total_fail_per_sec": 0.0,
+  "total_rps": 0.0,
+  "user_count": 0
+}

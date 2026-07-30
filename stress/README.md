@@ -97,7 +97,11 @@ UI 의 통계는 컨테이너 메모리에만 있다. 컨테이너를 내리면 
 
 ## 결과
 
-`/data01/dmt/stress-results/<타임스탬프>-<이름>/`
+실행 중에는 서버 `/data01/dmt/stress-results/<타임스탬프>-<이름>/` 에 쌓이고,
+측정이 끝나면 [results/](results/) 로 레포에 담는다. Locust 컨테이너를 내리면
+`export/` 내용은 서버에서 사라지므로(UI 통계가 메모리에만 있다) 레포가 보관 위치다.
+
+2026-07-30 실측 원자료는 [results/](results/) 에 있고 해석은 [docs/09](../docs/09-stress-test-results.md) 다.
 
 | 파일 | 내용 |
 |---|---|
