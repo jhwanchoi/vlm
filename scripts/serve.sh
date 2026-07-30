@@ -6,6 +6,7 @@
 #   ./serve.sh status     상태 확인
 #   ./serve.sh logs [이름]
 #   ./serve.sh preflight  기동하지 않고 몫 규칙(GPU 배정·RAM 총합·LB upstream 정합)만 검사
+#   ./serve.sh add <GPU>  운영 중인 레플리카를 건드리지 않고 한 대 추가 (무중단 확장)
 #
 # 절차 원본 = docs/04 §1, 플래그 원본 = docs/08 §8.
 # 아래 값들은 2026-07-28 strad32 실측으로 확정된 것이며, 바꾸기 전에 주석의 근거를 읽을 것.
@@ -26,6 +27,9 @@ MEMSET="${MEMSET:-0}"
 MEM_LIMIT="${MEM_LIMIT:-64g}"                    # 레플리카 1개당. DP=4 로 늘리면 64×4+2=258g > 몫 225g → 48g 이하로 내릴 것
 LB_MEM="${LB_MEM:-2g}"                            # nginx 는 가볍다. 상한만 걸어 둔다
 SHARE_MEM_GIB="${SHARE_MEM_GIB:-225}"            # docs/05 dst+dmt RAM 몫 (slice MemoryMax=241591910400)
+ADD_MEM_LIMIT="${ADD_MEM_LIMIT:-32g}"            # add 로 붙이는 레플리카의 RAM 상한.
+                                                 # 실사용은 레플리카당 약 10g 이므로 32g 로 충분하고,
+                                                 # DP=4 에서 몫(225g)을 넘지 않는다 (64+64+32+32+2=194g)
 RESTART="${RESTART:-unless-stopped}"             # 첫 기동 검증 때는 RESTART=no 권장. 실패 시 무한 재시작으로 GPU 를 붙잡는다
 # nginx 는 이 디렉토리의 *.conf 만 include 한다. 여기에 다른 서비스의 .conf 를 두면 LB 에 함께 로드된다.
 LB_CONF_DIR="${LB_CONF_DIR:-$(cd "$(dirname "$0")/../docker" && pwd)}"
@@ -183,12 +187,75 @@ status() {
     | python3 -c 'import sys,json;print([m["id"] for m in json.load(sys.stdin)["data"]])' 2>/dev/null || echo "(조회 실패)"
 }
 
+add() {  # 운영 레플리카를 건드리지 않고 한 대 추가한다. 무중단 확장 경로.
+  local g="$1" n port name uuid used total ups
+  case " $ALLOWED_GPUS " in
+    *" $g "*) ;;
+    *) echo "거부: GPU $g 는 배정($ALLOWED_GPUS) 밖이다"; exit 1 ;;
+  esac
+  local cnt; cnt="$(nvidia-smi -L | wc -l | tr -d ' ')"
+  [ "$cnt" = "8" ] || { echo "거부: GPU ${cnt}장만 보인다(정상 8장). 인덱스 밀림 위험"; exit 1; }
+
+  # 대상 GPU 가 비어 있어야 한다. 남의 실험이나 우리 레플리카가 이미 올라와 있으면 거부.
+  used="$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$g")"
+  [ "$used" -lt 1000 ] || { echo "거부: GPU $g 가 이미 ${used}MB 사용 중이다"; exit 1; }
+
+  n="$(replicas | wc -l | tr -d ' ')"
+  name="vlm-r${n}"; port=$((BASE_PORT + n))
+  docker inspect "$name" >/dev/null 2>&1 && { echo "거부: $name 이 이미 있다"; exit 1; }
+
+  # RAM 몫. 기존 컨테이너 상한 합에 신규를 더해 확인한다.
+  local cur=0 m
+  for c in $(docker ps -a --format '{{.Names}}' | grep -E '^vlm-'); do
+    m="$(docker inspect -f '{{.HostConfig.Memory}}' "$c" 2>/dev/null || echo 0)"
+    cur=$((cur + m / 1073741824))
+  done
+  total=$((cur + ${ADD_MEM_LIMIT%g}))
+  [ "$total" -le "$SHARE_MEM_GIB" ] \
+    || { echo "거부: RAM 총합 ${total}g > 몫 ${SHARE_MEM_GIB}g (ADD_MEM_LIMIT 를 내릴 것)"; exit 1; }
+
+  uuid="$(gpu_uuid "$g")"
+  [ -n "$uuid" ] || { echo "GPU 인덱스 $g 를 찾을 수 없다"; exit 1; }
+
+  echo ">> $name  GPU$g ($uuid)  ->  :$port  RAM ${cur}g+${ADD_MEM_LIMIT}=${total}g/${SHARE_MEM_GIB}g"
+  docker run -d --name "$name" --restart "$RESTART" \
+    --gpus "\"device=$uuid\"" \
+    --cpuset-cpus="$CPUSET" --cpuset-mems="$MEMSET" \
+    --memory="$ADD_MEM_LIMIT" --memory-swap="$ADD_MEM_LIMIT" --shm-size=16g \
+    -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    -v "$HF_CACHE":/cache \
+    -p "$port":8000 \
+    "$IMAGE" "$MODEL" "${VLLM_ARGS[@]}" >/dev/null
+
+  echo ">> 기동 대기 (모델 로드 + CUDA graph 캡처)"
+  for _ in $(seq 1 60); do
+    local st; st="$(docker inspect "$name" --format '{{.State.Status}}/{{.State.Health.Status}}')"
+    case "$st" in
+      running/healthy) echo ">> $name healthy"; break ;;
+      running/starting) ;;
+      *) echo ">> 기동 실패 ($st). 마지막 로그 30줄:"; docker logs --tail 30 "$name" 2>&1; exit 1 ;;
+    esac
+    sleep 15
+  done
+
+  # LB 는 이 레플리카를 아직 모른다. upstream 을 맞춘 뒤 reload 해야 트래픽이 간다.
+  ups="$(grep -cE '^[[:space:]]*server[[:space:]]+host\.docker\.internal:' "$LB_CONF_DIR/nginx-lb.conf")"
+  n="$(replicas | wc -l | tr -d ' ')"
+  if [ "$ups" != "$n" ]; then
+    echo ">> 주의: nginx upstream ${ups}개 != 레플리카 ${n}개."
+    echo "   $LB_CONF_DIR/nginx-lb.conf 에 'server host.docker.internal:$port ...' 를 추가하고"
+    echo "   docker exec vlm-lb nginx -t && docker exec vlm-lb nginx -s reload 를 실행할 것"
+  fi
+  status
+}
+
 case "${1:-status}" in
   up)     up ;;
+  add)    add "${2:?GPU 인덱스}" ;;
   down)   down ;;
   status) status ;;
   logs)   docker logs -f "${2:-vlm-r0}" ;;
   # 기동하지 않고 몫 규칙만 검사한다. 설정을 바꿨을 때 먼저 이걸로 확인할 것
   preflight) preflight "$(resolve_uuids | wc -w | tr -d ' ')" ;;
-  *)      echo "usage: $0 {up|down|status|logs [name]|preflight}"; exit 1 ;;
+  *)      echo "usage: $0 {up|add <GPU>|down|status|logs [name]|preflight}"; exit 1 ;;
 esac

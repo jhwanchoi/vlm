@@ -171,11 +171,16 @@ run() {
   # 감시할 레플리카는 부하 대상에서 정한다. LB 면 뒤의 레플리카 둘, 직결이면 그 포트.
   # 이걸 넘기지 않으면 monitor 가 기본값(8001 8002)만 보고, 실험 레플리카(:8003)로 부하를
   # 걸었을 때 엔진 지표가 통째로 비어 버린다(실측).
+  # LB 대상이면 그 뒤에 실제로 떠 있는 레플리카를 전부 찾는다. 개수를 하드코딩하면
+  # DP=4 로 확장한 뒤에도 2대만 보고 나머지 엔진 지표가 통째로 빠진다(실측).
   local watch
   case "$target" in
-    *:8000) watch="8001 8002" ;;
+    *:8000) watch="$(for c in $(docker ps --filter "name=^vlm-r[0-9]+$" --format '{{.Names}}'); do
+                       docker port "$c" 2>/dev/null | head -1 | sed 's/.*://'
+                     done | sort -n | tr '\n' ' ')" ;;
     *)      watch="${target##*:}" ;;
   esac
+  watch="${REPLICAS:-$watch}"   # 명시적으로 넘기면 그것을 쓴다
   echo ">> 감시 시작 (부하기와 분리된 프로세스). 감시 대상 레플리카: $watch"
   REPLICAS="$watch" nohup bash "$HERE/monitor.sh" "$rdir" "$port" "$container" >> "$rdir/monitor.out" 2>&1 &
   local mon_pid=$!

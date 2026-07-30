@@ -192,10 +192,16 @@ def main():
             meta = {}
     warmup = int(meta.get("warmup_sec", 30))
     target = str(meta.get("target", ""))
-    ports = [8001, 8002] if target.endswith(":8000") else [int(target.rsplit(":", 1)[-1] or 8001)]
 
     hist = read_csv(rdir / "locust_stats_history.csv")
     engine = read_csv(rdir / "engine.csv")
+    # 합산할 레플리카 포트는 engine.csv 에 실제로 기록된 것을 쓴다. LB 뒤의 레플리카 수를
+    # 코드에 박으면 DP=4 로 확장한 뒤 절반만 합산되어 처리량이 반토막으로 보인다(실측).
+    present = sorted({int(r["port"]) for r in engine if r.get("port", "").isdigit()})
+    if target.endswith(":8000"):
+        ports = present or [8001, 8002]
+    else:
+        ports = [int(target.rsplit(":", 1)[-1] or 8001)]
     gpu = read_csv(rdir / "gpu.csv")
     host = read_csv(rdir / "host.csv")
     if not hist:

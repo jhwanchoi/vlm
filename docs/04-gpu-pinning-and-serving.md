@@ -3,15 +3,16 @@
 - 작성: 2026-07-22, 갱신: 2026-07-30 (DP=2 가동 완료, 실측 반영)
 - 원본 리서치: [research/2026-07-22-brief-deployment.md](research/2026-07-22-brief-deployment.md)
 
-## 0. 현재 가동 상태 (2026-07-30)
+## 0. 현재 가동 상태 (2026-07-30, DP=4)
 
 | | |
 |---|---|
 | 공개 주소 | `http://${STRAD32_IP}:8000/v1` (nginx LB) · model `qwen36-35b-a3b` · 인증 없음 |
-| 레플리카 | `vlm-r0` (GPU 0, :8001) · `vlm-r1` (GPU 1, :8002). GPU 2-3 유휴 (실험 여유분) |
+| 레플리카 | `vlm-r0`~`vlm-r3` (GPU 0-3, :8001-:8004). 배정 4장 전부 서빙 (2026-07-30 dst 협의) |
 | 이미지 | `local-vlm/vllm:v0.24.0-dmt` (`docker/Dockerfile`) |
-| 기동 | `scripts/serve.sh up` — 몫 규칙은 `scripts/serve.sh preflight` 로 사전 검사 |
-| 용량 | 레플리카당 KV 3.14 GiB = 270,767 tokens. 부하 실측 상한 **720 출력 tok/s, 포화점 동시 16, 권고 동시성 11** ([09](09-stress-test-results.md)) |
+| 기동 | `scripts/serve.sh up` — 몫 규칙은 `preflight` 로 사전 검사. 무중단 증설은 `add <GPU>` |
+| 용량 | 레플리카당 KV 3.14 GiB = 270,767 tokens. 부하 실측 상한 **1,508 출력 tok/s, 포화점 동시 64, 권고 동시성 44** ([09](09-stress-test-results.md)) |
+| RAM | 상한 합 194g / 몫 225g (운영 2대 64g + 증설 2대 32g + LB 2g) |
 
 `:8001`/`:8002` 직결은 지표 조회·디버깅 전용. 클라이언트는 항상 `:8000`.
 레플리카에 직접 붙으면 분배도 폴백도 없다.
@@ -32,10 +33,13 @@ dmt가 서버를 소유·운영하고 dst는 API 클라이언트로 접속한다
 
 - 게이트 4(DST 골든셋)는 DST의 라벨 데이터가 필요하므로 나머지 게이트와 병렬로 준비한다
 - 포트는 dst+dmt 몫 규칙(8xxx)을 따른다 ([05 공유 자원 규칙](05-strad32-team-resource-split.md#공유-자원-규칙))
-- 서빙 규모는 DP=2로 시작한다 (미팅 합의: 실험 병목 최소화).
-  배치 부하가 커지면 풀 협의 후 DP=4까지 확장.
-  **DP=4 로 늘릴 때는 `MEM_LIMIT` 을 48g 이하로 내려야 한다** (64g×4 + LB 2g = 258g > 몫 225g).
-  `docker/nginx-lb.conf` 의 upstream 도 함께 늘려야 하며, 개수가 어긋나면 `serve.sh` 가 기동을 거부한다
+- 서빙 규모는 DP=2로 시작했고 (미팅 합의: 실험 병목 최소화),
+  2026-07-30 dst 협의로 **DP=4까지 확장 완료**했다.
+  **증설은 `serve.sh add <GPU>` 로 한다.** 운영 레플리카를 건드리지 않아 다운타임이 없다.
+  전체 재기동(`up`)으로 DP=4를 만들려면 `MEM_LIMIT` 을 48g 이하로 내려야 한다 (64g×4 + LB 2g = 258g > 몫 225g).
+  `docker/nginx-lb.conf` 의 upstream 도 함께 늘려야 하며, 개수가 어긋나면 `serve.sh` 가 기동을 거부한다.
+  **순서가 중요하다: 레플리카가 healthy 가 된 뒤에 upstream 을 늘리고 reload 한다.**
+  뒤집으면 LB 가 죽은 포트로 보내 dst 가 502 를 받는다
 - **LB 주의**: nginx upstream 에 `zone` 이 없으면 워커마다 연결 카운터가 따로여서
   동시 요청이 전부 첫 레플리카로 간다 (실측: 동시 6요청 6:0 → `zone` 추가 후 3:3)
 
