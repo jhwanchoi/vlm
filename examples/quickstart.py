@@ -17,7 +17,6 @@
 """
 import argparse
 import base64
-import io
 import os
 import pathlib
 import sys
@@ -99,7 +98,8 @@ def main() -> int:
         messages=[{"role": "user", "content": "1부터 5까지 세어줘"}],
         max_tokens=64, stream=True, extra_body=NO_THINKING,
     )
-    chunks = [c.choices[0].delta.content or "" for c in stream]
+    # usage 전용 청크 등 choices 가 빈 청크가 섞여 오므로 인덱싱 전에 확인한다.
+    chunks = [c.choices[0].delta.content or "" for c in stream if c.choices]
     body = "".join(chunks).replace("\n", " ").strip()
     print(f"[4] 스트리밍       : {len(chunks)} chunks -> {body[:80]}")
 

@@ -3,9 +3,13 @@
 SDK 없이 바로 두드려 보는 용도. Python 예제는 [quickstart.py](quickstart.py).
 
 ```bash
-export VLM=http://<STRAD32_IP>:8000        # .env 의 STRAD32_IP. 서버 안에서는 localhost
+export HOST=<STRAD32_IP>                   # .env 의 STRAD32_IP. 서버 안에서는 localhost
+export VLM=http://$HOST:8000               # 8000 = LB. 클라이언트는 항상 이 주소를 쓴다
 export MODEL=qwen36-35b-a3b
 ```
+
+`:8001`, `:8002` 는 개별 레플리카 직결이며 **디버깅·지표 조회 전용**이다.
+레플리카에 직접 붙으면 분배도 폴백도 없다.
 
 응답 파싱에 `jq` 가 없으면 `python3 -m json.tool` 이나 `python3 -c` 로 대체하면 된다.
 
@@ -136,8 +140,8 @@ LB 를 거치지 않고 **개별 레플리카**에 직접 물어야 한다. `:80
 지표가 한쪽 것만 보인다.
 
 ```bash
-curl -s http://<STRAD32_IP>:8001/metrics | grep -E '^vllm:(num_requests_running|num_requests_waiting\{|gpu_cache_usage_perc)'
-curl -s http://<STRAD32_IP>:8001/metrics | grep -E '^vllm:prefix_cache_(queries|hits)_total'
+curl -s http://$HOST:8001/metrics | grep -E '^vllm:(num_requests_running|num_requests_waiting\{|gpu_cache_usage_perc)'
+curl -s http://$HOST:8001/metrics | grep -E '^vllm:prefix_cache_(queries|hits)_total'
 ```
 
 | 지표 | 읽는 법 |
@@ -149,7 +153,8 @@ curl -s http://<STRAD32_IP>:8001/metrics | grep -E '^vllm:prefix_cache_(queries|
 ## 부하 한 번 줘 보기
 
 동시 요청을 넣어야 `num_requests_running` 이 올라가고 LB 분배도 관찰된다.
-순차 요청으로는 `least_conn` 이 항상 첫 레플리카를 고른다.
+분배가 한쪽으로 쏠리면 `docker/nginx-lb.conf` 의 `zone` 을 확인할 것
+(zone 이 없으면 nginx 워커마다 연결 카운터가 따로여서 동시 요청이 전부 첫 레플리카로 간다).
 
 ```bash
 for i in $(seq 1 8); do
@@ -163,7 +168,7 @@ done
 sleep 5
 for p in 8001 8002; do
   printf ":%s running=%s\n" "$p" \
-    "$(curl -s http://<STRAD32_IP>:$p/metrics | awk '/^vllm:num_requests_running/{print $2}')"
+    "$(curl -s http://$HOST:$p/metrics | awk '/^vllm:num_requests_running/{print $2}')"
 done
 wait
 ```
