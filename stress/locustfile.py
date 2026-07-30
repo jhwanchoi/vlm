@@ -50,7 +50,8 @@ TTFT_TIMEOUT = float(os.environ.get("TTFT_TIMEOUT", "60"))
 TOTAL_TIMEOUT = float(os.environ.get("TOTAL_TIMEOUT", "300"))
 
 # 부하 대상 화이트리스트. 타 팀 엔드포인트로 실수로 쏘는 것을 코드에서 막는다.
-_ALLOWED_PORTS = {"8000", "8001", "8002"}
+# 8000 LB, 8001-8002 운영 레플리카, 8003 실험용 레플리카(GPU 2, 우리 몫 여유분).
+_ALLOWED_PORTS = {"8000", "8001", "8002", "8003"}
 
 # inspection 판정 프롬프트. examples/prompts.md 2번을 부하용으로 줄인 형태.
 # 출력 형식을 좁게 고정해야 completion_tokens 가 흔들리지 않는다.

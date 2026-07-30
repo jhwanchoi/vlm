@@ -1,0 +1,37 @@
+[2026-07-30 04:21:39,216] 8656c39a312b/INFO/locust.main: Starting Locust 2.32.4
+[2026-07-30 04:21:39,216] 8656c39a312b/WARNING/locust.main: --run-time, --users or --spawn-rate have no impact on LoadShapes unless the shape class explicitly reads them. See: docs.locust.io/en/stable/custom-load-shape.html#use-common-options
+[2026-07-30 04:21:39,216] 8656c39a312b/WARNING/locust.main: The following option(s) will be ignored: --run-time
+[2026-07-30 04:21:39,216] 8656c39a312b/INFO/locust.main: Starting web interface at http://0.0.0.0:8095
+[2026-07-30 04:21:39,222] 8656c39a312b/INFO/locust.runners: Shape test starting.
+[2026-07-30 04:21:39,228] 8656c39a312b/INFO/locust.runners: Shape worker starting
+[2026-07-30 04:21:39,228] 8656c39a312b/INFO/locust.runners: Shape test updating to 1 users at 1.00 spawn rate
+[warmup] S1 ok
+[warmup] S2 ok
+[warmup] S3 ok
+[2026-07-30 04:21:48,380] 8656c39a312b/INFO/locust.runners: Ramping to 1 users at a rate of 1.00 per second
+[2026-07-30 04:21:48,381] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 1} (1 total users)
+[2026-07-30 04:23:09,421] 8656c39a312b/INFO/locust.runners: Shape test updating to 2 users at 2.00 spawn rate
+[2026-07-30 04:23:09,422] 8656c39a312b/INFO/locust.runners: Ramping to 2 users at a rate of 2.00 per second
+[2026-07-30 04:23:09,422] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 2} (2 total users)
+[2026-07-30 04:24:39,633] 8656c39a312b/INFO/locust.runners: Shape test updating to 4 users at 4.00 spawn rate
+[2026-07-30 04:24:39,634] 8656c39a312b/INFO/locust.runners: Ramping to 4 users at a rate of 4.00 per second
+[2026-07-30 04:24:39,635] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 4} (4 total users)
+[2026-07-30 04:26:09,880] 8656c39a312b/INFO/locust.runners: Shape test updating to 8 users at 8.00 spawn rate
+[2026-07-30 04:26:09,880] 8656c39a312b/INFO/locust.runners: Ramping to 8 users at a rate of 8.00 per second
+[2026-07-30 04:26:09,880] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 8} (8 total users)
+[2026-07-30 04:27:40,151] 8656c39a312b/INFO/locust.runners: Shape test updating to 12 users at 12.00 spawn rate
+[2026-07-30 04:27:40,151] 8656c39a312b/INFO/locust.runners: Ramping to 12 users at a rate of 12.00 per second
+[2026-07-30 04:27:40,152] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 12} (12 total users)
+[2026-07-30 04:29:09,433] 8656c39a312b/INFO/locust.runners: Shape test updating to 16 users at 16.00 spawn rate
+[2026-07-30 04:29:09,433] 8656c39a312b/INFO/locust.runners: Ramping to 16 users at a rate of 16.00 per second
+[2026-07-30 04:29:09,434] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 16} (16 total users)
+[2026-07-30 04:30:39,726] 8656c39a312b/INFO/locust.runners: Shape test updating to 24 users at 24.00 spawn rate
+[2026-07-30 04:30:39,726] 8656c39a312b/INFO/locust.runners: Ramping to 24 users at a rate of 24.00 per second
+[2026-07-30 04:30:39,727] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 24} (24 total users)
+[2026-07-30 04:32:10,029] 8656c39a312b/INFO/locust.runners: Shape test updating to 32 users at 32.00 spawn rate
+[2026-07-30 04:32:10,029] 8656c39a312b/INFO/locust.runners: Ramping to 32 users at a rate of 32.00 per second
+[2026-07-30 04:32:10,030] 8656c39a312b/INFO/locust.runners: All users spawned: {"VLMUser": 32} (32 total users)
+[2026-07-30 04:33:39,356] 8656c39a312b/INFO/locust.runners: Shape test stopping
+[2026-07-30 04:33:39,376] 8656c39a312b/INFO/locust.main: --run-time limit reached, stopping test
+[2026-07-30 04:33:39,376] 8656c39a312b/INFO/locust.main: --autoquit not specified, leaving web ui running indefinitely
+[2026-07-30 04:33:39,376] 8656c39a312b/INFO/locust.main: Run time limit set to 840 seconds

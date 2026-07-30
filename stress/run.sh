@@ -85,7 +85,7 @@ preflight() {
     *) echo "  NG  포트 $port 는 dst+dmt 몫(8xxx) 밖이다"; fail=1 ;;
   esac
   case "$port" in
-    8000|8001|8002) echo "  NG  포트 $port 는 서빙이 쓰는 포트다"; fail=1 ;;
+    8000|8001|8002|8003) echo "  NG  포트 $port 는 서빙이 쓰는 포트다"; fail=1 ;;
   esac
   if ss -ltn 2>/dev/null | grep -q ":$port "; then
     echo "  NG  포트 $port 이미 사용 중"; fail=1
@@ -94,8 +94,8 @@ preflight() {
   fi
 
   case "$target" in
-    *:8000|*:8001|*:8002) echo "  ok  대상 $target (우리 엔드포인트)" ;;
-    *) echo "  NG  대상 $target 은 허용 목록(:8000/:8001/:8002) 밖이다"; fail=1 ;;
+    *:8000|*:8001|*:8002|*:8003) echo "  ok  대상 $target (우리 엔드포인트)" ;;
+    *) echo "  NG  대상 $target 은 허용 목록(:8000-:8003) 밖이다"; fail=1 ;;
   esac
 
   mkdir -p "$RESULTS_ROOT" 2>/dev/null || true
@@ -168,8 +168,16 @@ run() {
     echo "}"
   } > "$rdir/meta.json"
 
-  echo ">> 감시 시작 (부하기와 분리된 프로세스)"
-  nohup bash "$HERE/monitor.sh" "$rdir" "$port" "$container" >> "$rdir/monitor.out" 2>&1 &
+  # 감시할 레플리카는 부하 대상에서 정한다. LB 면 뒤의 레플리카 둘, 직결이면 그 포트.
+  # 이걸 넘기지 않으면 monitor 가 기본값(8001 8002)만 보고, 실험 레플리카(:8003)로 부하를
+  # 걸었을 때 엔진 지표가 통째로 비어 버린다(실측).
+  local watch
+  case "$target" in
+    *:8000) watch="8001 8002" ;;
+    *)      watch="${target##*:}" ;;
+  esac
+  echo ">> 감시 시작 (부하기와 분리된 프로세스). 감시 대상 레플리카: $watch"
+  REPLICAS="$watch" nohup bash "$HERE/monitor.sh" "$rdir" "$port" "$container" >> "$rdir/monitor.out" 2>&1 &
   local mon_pid=$!
   echo "$mon_pid" > "$rdir/monitor.pid"
   sleep 4

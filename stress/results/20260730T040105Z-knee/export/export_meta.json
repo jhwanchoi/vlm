@@ -1,0 +1,6 @@
+{
+  "exported_utc": "2026-07-30T04:34:59Z",
+  "run": "knee", "port": 8094,
+  "locust_state": "stopped",
+  "export_bytes": 1555308
+}

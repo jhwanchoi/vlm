@@ -15,9 +15,11 @@
 | `*-run3a` | LB `:8000` | 8,16 | S1 텍스트만 | 해상도별 비용 |
 | `*-run3b` | LB `:8000` | 8,16 | S2 1MP | 해상도별 비용 |
 | `*-run3c` | LB `:8000` | 8,16 | S3 native 4464x2160 | 해상도별 비용 |
+| `*-knee` | LB `:8000` | 8,12,16,24,32 (단계 180초) | 혼합 | 포화점 재현성 확인. 90초 단계의 변동 검증 |
+| `*-seqs32` | 실험 레플리카 `:8003` | 1,2,4,8,12,16,24,32 | 혼합 | `--max-num-seqs` 32 A/B (run2 와 동일 조건) |
 | `*-smoke` | LB `:8000` | 1,4 | 혼합 | 하네스 검증용. 본 결과에 쓰지 않음 |
 
-단계당 90초이며 앞 30초는 워밍으로 버리고 뒤 60초를 측정 구간으로 쓴다.
+단계당 90초(`*-knee` 는 180초)이며 앞 30초는 워밍으로 버리고 나머지를 측정 구간으로 쓴다.
 혼합 비중은 텍스트 2, 1MP 5, native 3 이다.
 
 ## 파일
@@ -29,7 +31,7 @@
 | `locust_stats_history.csv` | Locust | 클라이언트 측 시계열 원자료. `analyze.py` 의 주 입력 |
 | `locust_stats.csv` | Locust | 전체 기간 집계 |
 | `locust_failures.csv`, `locust_exceptions.csv` | Locust | 실패와 예외 (전 런 0건이라 헤더만) |
-| `engine.csv` | `monitor.sh` | 레플리카별 엔진 지표 1초 샘플 (running, waiting, KV, preemption, 생성 토큰) |
+| `engine.csv` | `monitor.sh` | 레플리카별 엔진 지표 1초 샘플 (running, waiting, KV, preemption, 생성 토큰). `*-seqs32` 는 감시 대상 포트 버그로 비어 있다 (docs/09 8번) |
 | `gpu.csv` | `monitor.sh` | GPU 8장의 util, mem, power, temp, SM 클럭 1초 샘플 |
 | `host.csv` | `monitor.sh` | load average, MemAvailable, 컨테이너 메모리, NUMA free, LB 5xx, 컨테이너 CPU |
 | `guard.log` | `monitor.sh` | 가드 판정 이력. 타 팀 GPU 클럭 기준선 포함 |

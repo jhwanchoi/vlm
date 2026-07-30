@@ -1,0 +1,34 @@
+{
+  "per_class": {
+    "VLMUser": {
+      "ratio": 0.0,
+      "tasks": {
+        "task_S1": {
+          "ratio": 0.2
+        },
+        "task_S2": {
+          "ratio": 0.5
+        },
+        "task_S3": {
+          "ratio": 0.3
+        }
+      }
+    }
+  },
+  "total": {
+    "VLMUser": {
+      "ratio": 0.0,
+      "tasks": {
+        "task_S1": {
+          "ratio": 0.0
+        },
+        "task_S2": {
+          "ratio": 0.0
+        },
+        "task_S3": {
+          "ratio": 0.0
+        }
+      }
+    }
+  }
+}

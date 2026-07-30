@@ -1,0 +1,6 @@
+{
+  "exported_utc": "2026-07-30T04:34:58Z",
+  "run": "seqs32", "port": 8095,
+  "locust_state": "stopped",
+  "export_bytes": 1542711
+}
