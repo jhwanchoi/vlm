@@ -72,6 +72,29 @@ ssh -L 8089:localhost:8089 -L 8090:localhost:8090 dmt@<서버>
 컨테이너는 테스트가 끝나도 내리지 않는다. Web UI 에서 결과를 계속 볼 수 있고,
 수동으로 재실행해도 `monitor.sh` 가 대기 상태로 남아 가드가 걸린다.
 
+## Locust UI 데이터 내보내기
+
+UI 의 통계는 컨테이너 메모리에만 있다. 컨테이너를 내리면 사라지므로 내보내 둔다.
+테스트 종료 후 부하를 다시 걸지 않았다면 종료 시점 스냅샷이다.
+
+```bash
+./export.sh          # 떠 있는 모든 vlm-stress-* 컨테이너
+./export.sh run1     # 특정 런만
+```
+
+각 런의 결과 디렉토리 아래 `export/` 에 저장된다. UI 탭 구성과 같다.
+
+| 파일 | UI 대응 |
+|---|---|
+| `statistics.csv` | Statistics (시나리오별 요청 수, 지연 분위, 평균 콘텐츠 크기 = 토큰 수) |
+| `charts_report.html` | Charts (RPS, 응답시간, 사용자 수 시계열 포함) |
+| `failures.csv` | Failures |
+| `exceptions.csv` | Exceptions |
+| `ratio.json` | Current ratio (시나리오 가중치) |
+| `locust_logs.json` | Logs |
+| `stats_snapshot.json` | 종료 시점 상태 전체 스냅샷 |
+| `container.log` | 컨테이너 표준 출력 (warmup 결과, shape 전환 이력) |
+
 ## 결과
 
 `/data01/dmt/stress-results/<타임스탬프>-<이름>/`
@@ -102,6 +125,7 @@ python3 analyze.py /data01/dmt/stress-results/<디렉토리> > /tmp/summary.md
 | `run.sh` | 오케스트레이션, preflight, watchdog, 결과 수집 |
 | `analyze.py` | CSV 입력, `summary.md` 출력. 표준 라이브러리만 사용 |
 | `make_assets.py` | 합성 이미지 생성 (로컬 실행, Pillow 필요) |
+| `export.sh` | Locust UI 데이터 내보내기 (컨테이너를 내리기 전에 실행) |
 
 ## 워크로드
 
