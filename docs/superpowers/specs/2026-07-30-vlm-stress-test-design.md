@@ -39,11 +39,14 @@
 |---|---|---|
 | 타 팀 GPU(4-7) 온도 | 83도 초과 | 열 결합으로 타 팀 카드 throttle |
 | 타 팀 GPU(4-7) SM 클럭 | 시작 대비 15퍼센트 이상 하락이 30초 지속 | throttle 실발생 신호 |
-| NUMA node 0 여유 메모리 | 8 GiB 미만 | 우리 구역 압박 |
+| MemAvailable | 20 GiB 미만 | 서버 메모리 압박. `numactl` 의 node free 는 page cache 를 제외한 값이라 정상 운영 중에도 2 GB 수준으로 낮게 나오며 압박 신호가 아니다(실측). node free 는 참고용으로 CSV 에만 남긴다 |
+| 우리 컨테이너 메모리 실사용 합 | 200 GiB 초과 | 몫 225 GiB 방어 |
 | load average (1분) | 96 초과 (코어 64의 1.5배) | 서버 전반 |
 | LB 5xx 비율 | 20퍼센트 초과가 30초 지속 | 공용 서비스이므로 dst 영향. `vlm-lb` access log의 최근 30초 status 코드로 집계한다. 클라이언트 타임아웃은 5xx를 만들지 않으므로 파괴점 측정과 충돌하지 않는다 |
 
-중단은 Locust REST API `POST /stop` 으로 수행하고, 발동 이유를 결과 디렉토리에 기록한다.
+중단은 Locust REST API `GET /stop` 으로 수행한다. Locust 2.32 의 이 엔드포인트는 GET 전용이며 POST 는 405 를 돌려주는데, curl 은 405 에도 성공으로 종료하므로 응답 코드를 확인하지 않으면 중단한 줄 알고 부하가 계속 돈다(검증 단계 실측). HTTP 200 을 확인하고, 실패하면 컨테이너를 직접 정지하여 3중화한다. 발동 이유는 결과 디렉토리에 기록한다.
+
+무한 부하 차단은 3중이다. shape 종료(1차), `--run-time`(2차, LoadShape 사용 시 경고가 뜨지만 실제로 작동함을 확인), run.sh watchdog(3차).
 
 ## 3. 아키텍처
 
@@ -131,7 +134,7 @@ run2 진행 중 r1이 dst 트래픽을 받으면 비교가 흔들린다. dst 트
 |---|---|
 | `num_requests_running`, `num_requests_waiting` | 바쁜 이유가 처리 중인지 큐잉인지 구분 |
 | `num_requests_waiting_by_reason{capacity,deferred}` | 큐잉 원인이 KV 부족인지 스케줄러인지 |
-| `gpu_cache_usage_perc` | KV 3.14 GiB 포화도 |
+| `kv_cache_usage_perc` | KV 3.14 GiB 포화도 |
 | `num_preemptions_total` | KV 압박의 직접 증거. 증가 시작 동시성이 실질 상한 |
 | `request_queue_time_seconds` | 큐 대기 시간 |
 | `time_to_first_token_seconds` | 서버 관점 TTFT. 클라이언트 측정과 대조하여 부하기 오버헤드를 검출 |
@@ -148,7 +151,8 @@ run2 진행 중 r1이 dst 트래픽을 받으면 비교가 흔들린다. dst 트
 | `locust_stats.csv`, `locust_stats_history.csv`, `locust_failures.csv` | Locust `--csv --csv-full-history` |
 | `report.html` | Locust HTML 리포트 |
 | `engine.csv` | 레플리카별 엔진 지표 1초 샘플 |
-| `system.csv` | GPU 8장, load average, NUMA 여유 1초 샘플 |
+| `gpu.csv` | GPU 8장의 util, mem, power, temp, SM 클럭 1초 샘플 |
+| `host.csv` | load average, MemAvailable, 우리 컨테이너 메모리, NUMA free, LB 5xx, 컨테이너 CPU |
 | `guard.log` | 가드 판정 이력과 발동 이유 |
 | `meta.json` | 이미지 태그, vLLM 플래그 스냅샷, 대상, 시각, 타 팀 컨테이너 스냅샷 |
 | `summary.md` | 아래 판정 규칙 적용 결과 |
@@ -157,7 +161,7 @@ run2 진행 중 r1이 dst 트래픽을 받으면 비교가 흔들린다. dst 트
 
 | 항목 | 정의 |
 |---|---|
-| knee | 출력 처리량 증가율이 10퍼센트 미만이면서 p95 지연이 전 단계 대비 1.5배를 초과하는 첫 단계. 한 조건만 충족하면 후보로 표기 |
+| knee | 출력 처리량 증가율이 10퍼센트 미만이면서 p95 지연이 전 단계 대비 1.5배를 초과하는 첫 단계. 처리량 증가율이 20퍼센트 미만이면 후보로 표기한다. 지연 증가만으로는 판정하지 않는다. 폐루프 부하에서는 처리량이 크게 늘 때도 지연이 함께 늘기 때문이다 |
 | 파괴점 | 실패율 1퍼센트를 초과하는 첫 단계 |
 | 실질 상한 | `num_preemptions_total` 이 증가하기 시작하는 첫 단계 |
 | DP 효율 | run1 최대 처리량 / run2 최대 처리량 |
@@ -206,7 +210,9 @@ stress/
 
 1. `run.sh preflight`: cpuset이 배정의 부분집합인지, RAM 총합이 몫 이하인지, `--gpus` 미지정인지, 포트가 8xxx인지, 대상이 우리 엔드포인트인지 확인
 2. 가드 단독 테스트: 임계를 의도적으로 낮추어(`GUARD_LOADAVG=0.1`) 자동 중단이 실제로 걸리는지 확인한다. 부하를 걸기 전에 브레이크가 듣는 것을 증명한다
-3. smoke: 동시 1, 60초. CSV 4종 생성과 `analyze.py` 통과 확인
+3. smoke: 동시 1과 4, 각 90초. CSV 생성과 `analyze.py` 통과 확인
+
+검증 단계에서 실제로 잡은 결함은 여섯 가지이며 모두 반영했다. Locust `/stop` 의 메서드, 소수 임계에서의 bash 정수 비교 실패, `numactl` free 기반 메모리 가드 오탐, 감시 프로세스의 컨테이너 등장 대기 누락, 유휴 GPU 클럭을 기준선으로 잡는 throttle 오탐, 지연만으로 포화를 판정하는 규칙이다. 앞의 두 개는 가드를 조용히 무력화하는 결함이었다.
 
 이후 run1, run2, run3을 순차 실행한다. 사후에 타 팀 GPU 온도와 클럭 기록으로 무침범을 확인하고, LB 5xx로 dst 영향을 확인한다.
 
