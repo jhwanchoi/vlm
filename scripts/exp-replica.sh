@@ -33,7 +33,7 @@ BASE_ARGS=(
   --gpu-memory-utilization 0.95
   --max-model-len 32768
   --max-num-seqs 16
-  --max-num-batched-tokens 16384
+  --max-num-batched-tokens 10240
   --disable-chunked-mm-input
   --mm-processor-cache-gb 0
   --limit-mm-per-prompt '{"image": 4}'

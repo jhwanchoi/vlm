@@ -43,9 +43,14 @@ LB_CONF_DIR="${LB_CONF_DIR:-$(cd "$(dirname "$0")/../docker" && pwd)}"
 #       vLLM 0.21+ 는 CUDA graph 메모리도 프로파일에 포함하므로 0.95 의 실효는 0.9347 이고,
 #       엔진이 로그로 "동일 KV 를 원하면 0.9653" 을 권고한다. VRAM 여유는 카드당 약 2.7 GiB.
 #       KV 를 늘리려면 0.96-0.965 로 A/B 할 것 (부하 중 활성화 피크와 상충하므로 실측 필수).
-#   --max-num-batched-tokens 16384
-#       한 스텝 활성화 피크를 줄여 KV 여유를 만든다. 이미지 1장(약 9.4K 토큰)은
-#       여전히 한 청크에 들어간다.
+#   --max-num-batched-tokens 10240
+#       한 스텝 활성화 피크를 줄인다. 16384 이던 2026-08-03, 멀티이미지 긴 prefill 이
+#       16K 배치를 채운 순간 flashinfer MoE workspace 일시 할당 1.04 GiB > VRAM 여유
+#       1.02 GiB 로 레플리카 4대가 순차 전멸했다 (docs/08 §8). 10240 은 피크를 약
+#       0.65 GiB 로 낮춰 마진을 확보한다.
+#       주의: --disable-chunked-mm-input 이라 mm 아이템은 한 청크에 통째로 들어가야
+#       한다. native 이미지 1장 = 약 9.4K 토큰이므로 9.5K 미만으로 내리면 native
+#       해상도 요청이 스케줄 불가가 된다.
 #   --max-num-seqs 16
 #       hybrid 는 Mamba cache 블록이 한정적이라 캡이 필수 (docs/02 Hybrid 주의 1번).
 #   --kv-cache-dtype fp8 은 넣지 않는다
@@ -60,7 +65,7 @@ VLLM_ARGS=(
   --gpu-memory-utilization 0.95
   --max-model-len 32768
   --max-num-seqs 16
-  --max-num-batched-tokens 16384
+  --max-num-batched-tokens 10240
   --disable-chunked-mm-input
   --mm-processor-cache-gb 0
   --limit-mm-per-prompt '{"image": 4}'

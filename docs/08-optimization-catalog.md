@@ -165,7 +165,7 @@ vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
   --gpu-memory-utilization 0.95 \            # 0.90 은 기동 실패 (KV -1.09 GiB)
   --max-model-len 32768 \
   --max-num-seqs 16 \                        # hybrid Mamba cache 캡
-  --max-num-batched-tokens 16384 \           # 스텝 활성화 피크를 낮춰 KV 여유 확보
+  --max-num-batched-tokens 10240 \           # 스텝 활성화 피크 축소. 16384 는 OOM 전멸 이력 (아래)
   --disable-chunked-mm-input \
   --mm-processor-cache-gb 0 \
   --limit-mm-per-prompt '{"image": 4}' \
@@ -178,7 +178,7 @@ vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
 | 항목 | 초안 | 확정 | 이유 |
 |---|---|---|---|
 | `--gpu-memory-utilization` | 미지정 | **0.95** | 가중치 23.25 GiB 실측. 0.90 이면 `Available KV cache memory: -1.09 GiB` 로 ValueError |
-| `--max-num-batched-tokens` | 32768 | **16384** | 스텝 활성화 피크 축소 → KV 여유. 이미지 1장(약 9.4K)은 여전히 한 청크에 들어간다 |
+| `--max-num-batched-tokens` | 32768 | **10240** | 처음 16384 로 운영하다 2026-08-03 장애로 하향. 멀티이미지 긴 prefill 이 16K 배치를 채우자 flashinfer cutlass MoE 의 workspace 일시 할당(1.04 GiB)이 VRAM 여유(1.02 GiB)를 넘어 `MemoryError: CUDA out of memory` 로 레플리카 4대 순차 전멸. 10240 은 피크를 약 0.65 GiB 로 낮춘다. 하한 주의: `--disable-chunked-mm-input` 이라 native 이미지 1장(9.4K 토큰)이 한 청크에 들어가야 하므로 9.5K 미만 금지 |
 | `--max-num-seqs` | 32 | **16** | Mamba cache 블록 한정. KV 3.14 GiB 로는 32 를 지탱하지 못한다 |
 | `--kv-cache-dtype fp8` | 있음 | **제외** | 가동 검증 게이트 1(NVFP4 정확도)과 교락. 게이트 통과 후 별도 A/B |
 | `--limit-mm-per-prompt` | image: 5 | **image: 4** | 단, 4464x2160 프레임은 9.4K 토큰이므로 32K 컨텍스트에는 **실제 3장**까지. few-shot 이미지는 크롭/다운스케일 전제 |
