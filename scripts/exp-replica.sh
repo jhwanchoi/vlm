@@ -30,10 +30,10 @@ IDLE_VRAM_MB="${IDLE_VRAM_MB:-1000}"   # 이 값 이상 쓰는 GPU 는 유휴로
 # 운영과 동일한 기준 플래그. 실험 인자가 뒤에 붙어 같은 플래그를 덮어쓴다.
 BASE_ARGS=(
   --served-model-name "$SERVED_NAME"
-  --gpu-memory-utilization 0.95
+  --gpu-memory-utilization 0.93
   --max-model-len 32768
   --max-num-seqs 16
-  --max-num-batched-tokens 10240
+  --max-num-batched-tokens 16384
   --disable-chunked-mm-input
   --mm-processor-cache-gb 0
   --limit-mm-per-prompt '{"image": 4}'

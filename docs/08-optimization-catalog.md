@@ -162,10 +162,10 @@ structured output과 spec decode는 V1에서 정합.
 # 컨테이너 레벨에서 UUID 로 핀하므로 CUDA_VISIBLE_DEVICES 는 쓰지 않는다 (docs/04 §2)
 vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
   --served-model-name qwen36-35b-a3b \
-  --gpu-memory-utilization 0.95 \            # 0.90 은 기동 실패 (KV -1.09 GiB)
+  --gpu-memory-utilization 0.93 \            # 0.90 은 기동 실패, 0.95 는 OOM 전멸 이력 (아래)
   --max-model-len 32768 \
   --max-num-seqs 16 \                        # hybrid Mamba cache 캡
-  --max-num-batched-tokens 10240 \           # 스텝 활성화 피크 축소. 16384 는 OOM 전멸 이력 (아래)
+  --max-num-batched-tokens 16384 \           # 하한. disable-chunked-mm-input 이 16384 미만을 거부 (아래)
   --disable-chunked-mm-input \
   --mm-processor-cache-gb 0 \
   --limit-mm-per-prompt '{"image": 4}' \
@@ -177,8 +177,8 @@ vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
 
 | 항목 | 초안 | 확정 | 이유 |
 |---|---|---|---|
-| `--gpu-memory-utilization` | 미지정 | **0.95** | 가중치 23.25 GiB 실측. 0.90 이면 `Available KV cache memory: -1.09 GiB` 로 ValueError |
-| `--max-num-batched-tokens` | 32768 | **10240** | 처음 16384 로 운영하다 2026-08-03 장애로 하향. 멀티이미지 긴 prefill 이 16K 배치를 채우자 flashinfer cutlass MoE 의 workspace 일시 할당(1.04 GiB)이 VRAM 여유(1.02 GiB)를 넘어 `MemoryError: CUDA out of memory` 로 레플리카 4대 순차 전멸. 10240 은 피크를 약 0.65 GiB 로 낮춘다. 하한 주의: `--disable-chunked-mm-input` 이라 native 이미지 1장(9.4K 토큰)이 한 청크에 들어가야 하므로 9.5K 미만 금지 |
+| `--gpu-memory-utilization` | 미지정 | **0.93** | 0.90 은 기동 실패(가중치 23.25 GiB 실측, `Available KV cache memory: -1.09 GiB` ValueError). 처음 0.95 로 운영하다 2026-08-03 장애로 하향: 부하 시 VRAM 여유가 약 1.0 GiB 뿐인데 멀티이미지 긴 prefill 이 16K 배치를 채우자 flashinfer cutlass MoE workspace 일시 할당(1.04 GiB)이 이를 넘어 `MemoryError: CUDA out of memory` 로 레플리카 4대 순차 전멸. 0.93 은 여유 약 1.6 GiB, 대가는 KV 3.14 -> 약 2.5 GiB (실측 피크 2.0 GiB 수용) |
+| `--max-num-batched-tokens` | 32768 | **16384** | 스텝 활성화 피크 축소 목적으로 32768 에서 하향. **더 내릴 수 없다**: `--disable-chunked-mm-input` 하에서 vLLM 이 `max_tokens_per_mm_item`(이 모델 16384) 미만을 거부한다. 2026-08-03 OOM 조치로 10240 을 시도했으나 `Chunked MM input disabled but max_tokens_per_mm_item (16384) is larger than max_num_batched_tokens` 로 기동 실패, 조치는 util 0.93 하향으로 전환했다. 활성화 피크를 더 줄이려면 chunked mm input 허용을 exp-replica 로 A/B |
 | `--max-num-seqs` | 32 | **16** | Mamba cache 블록 한정. KV 3.14 GiB 로는 32 를 지탱하지 못한다 |
 | `--kv-cache-dtype fp8` | 있음 | **제외** | 가동 검증 게이트 1(NVFP4 정확도)과 교락. 게이트 통과 후 별도 A/B |
 | `--limit-mm-per-prompt` | image: 5 | **image: 4** | 단, 4464x2160 프레임은 9.4K 토큰이므로 32K 컨텍스트에는 **실제 3장**까지. few-shot 이미지는 크롭/다운스케일 전제 |
@@ -194,8 +194,8 @@ vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
 | VRAM | 29.85 / 32.6 GiB (여유 약 2.7 GiB) |
 | prefix cache | **자동 비활성** (`prefix_cache_queries_total` = 0 고정) |
 
-- **다음 최적화 후보 1순위**: vLLM 0.21+ 는 CUDA graph 메모리도 프로파일에 포함하므로 `0.95` 의 실효는 `0.9347`.
-  엔진이 로그로 `0.9653` 을 권고한다. KV 를 키우려면 여기부터 A/B (부하 중 활성화 피크와 상충하므로 실측 필수)
+- 위 용량 표는 util 0.95 시절 실측이다. 0.93 에서는 KV 약 2.5 GiB 로 준다
+- **util 상향으로 KV 를 키우는 최적화는 2026-08-03 장애 이후 봉인.** 부하 중 MoE workspace 일시 할당(16K 배치에서 1.04 GiB)과 정면 상충한다. 되돌리려면 멀티이미지 16K prefill 부하로 workspace 피크를 먼저 실측할 것
 - 참고: block-wise FP8 체크포인트를 쓸 때는 `VLLM_USE_DEEP_GEMM=0` 이 필요하다.
   DeepGEMM 이 SM120 의 scale factor 레이아웃을 몰라 `Unknown SF transformation` 으로 엔진이 죽는다. 현재 NVFP4 라 해당 없음
 

@@ -35,22 +35,23 @@ RESTART="${RESTART:-unless-stopped}"             # 첫 기동 검증 때는 REST
 LB_CONF_DIR="${LB_CONF_DIR:-$(cd "$(dirname "$0")/../docker" && pwd)}"
 
 # ── 확정된 vLLM 플래그와 근거 ───────────────────────────────────────────────
-#   --gpu-memory-utilization 0.95
-#       0.90 으로는 기동 실패한다. 가중치가 23.25 GiB 를 쓰는데(체크포인트가 순수 NVFP4 가
+#   --gpu-memory-utilization 0.93
+#       0.90 은 기동 실패. 가중치가 23.25 GiB 를 쓰는데(체크포인트가 순수 NVFP4 가
 #       아니라 MIXED_PRECISION 이라 docs/02 의 "약 20GB" 추정보다 크다) 0.90 예산에서는
 #       "Available KV cache memory: -1.09 GiB" 로 ValueError 가 난다.
-#       0.95 의 결과(실측): KV 3.14 GiB = 270,767 tokens, 32K 요청 기준 최대 동시성 8.26x.
-#       vLLM 0.21+ 는 CUDA graph 메모리도 프로파일에 포함하므로 0.95 의 실효는 0.9347 이고,
-#       엔진이 로그로 "동일 KV 를 원하면 0.9653" 을 권고한다. VRAM 여유는 카드당 약 2.7 GiB.
-#       KV 를 늘리려면 0.96-0.965 로 A/B 할 것 (부하 중 활성화 피크와 상충하므로 실측 필수).
-#   --max-num-batched-tokens 10240
-#       한 스텝 활성화 피크를 줄인다. 16384 이던 2026-08-03, 멀티이미지 긴 prefill 이
-#       16K 배치를 채운 순간 flashinfer MoE workspace 일시 할당 1.04 GiB > VRAM 여유
-#       1.02 GiB 로 레플리카 4대가 순차 전멸했다 (docs/08 §8). 10240 은 피크를 약
-#       0.65 GiB 로 낮춰 마진을 확보한다.
-#       주의: --disable-chunked-mm-input 이라 mm 아이템은 한 청크에 통째로 들어가야
-#       한다. native 이미지 1장 = 약 9.4K 토큰이므로 9.5K 미만으로 내리면 native
-#       해상도 요청이 스케줄 불가가 된다.
+#       0.95 는 2026-08-03 OOM 전멸의 원인. 부하 시 VRAM 여유가 약 1.0 GiB 뿐인데
+#       멀티이미지 긴 prefill 이 16K 배치를 채우자 flashinfer cutlass MoE 가 workspace
+#       1.04 GiB 를 일시 요구, 레플리카 4대가 순차로 죽었다 (docs/08 8번).
+#       0.93 은 여유를 약 1.6 GiB 로 늘린다. 대가는 KV 3.14 -> 약 2.5 GiB 이며
+#       실측 KV 피크(동시 64 에서 64% = 2.0 GiB)는 여전히 수용한다.
+#       되돌리려면 멀티이미지 16K prefill 부하로 workspace 피크를 먼저 실측할 것.
+#   --max-num-batched-tokens 16384
+#       이 값이 하한이다. --disable-chunked-mm-input 하에서 vLLM 은
+#       max_tokens_per_mm_item(이 모델 16384) 미만을 거부한다. 10240 시도는
+#       "Chunked MM input disabled but max_tokens_per_mm_item (16384) is larger
+#       than max_num_batched_tokens" 로 기동 자체가 실패했다(2026-08-03).
+#       스텝 활성화 피크를 더 줄이려면 이 값이 아니라 위 util 로 조절하거나,
+#       chunked mm input 허용을 exp-replica 로 A/B 할 것.
 #   --max-num-seqs 16
 #       hybrid 는 Mamba cache 블록이 한정적이라 캡이 필수 (docs/02 Hybrid 주의 1번).
 #   --kv-cache-dtype fp8 은 넣지 않는다
@@ -62,10 +63,10 @@ LB_CONF_DIR="${LB_CONF_DIR:-$(cd "$(dirname "$0")/../docker" && pwd)}"
 #       엔진이 죽는다. 현재 모델은 NVFP4 라 해당 없음.
 VLLM_ARGS=(
   --served-model-name "$SERVED_NAME"
-  --gpu-memory-utilization 0.95
+  --gpu-memory-utilization 0.93
   --max-model-len 32768
   --max-num-seqs 16
-  --max-num-batched-tokens 10240
+  --max-num-batched-tokens 16384
   --disable-chunked-mm-input
   --mm-processor-cache-gb 0
   --limit-mm-per-prompt '{"image": 4}'
