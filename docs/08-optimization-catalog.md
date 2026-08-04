@@ -79,6 +79,9 @@ visual token pruning 논문 직접 통합 · Medusa ·
    - per-request `max_pixels` 다르면 해시 다름 (오히려 안전)
    - 주의: Qwen3.5/3.6 hybrid는 GDN 때문에 prefix 캐시 granularity 528토큰 + "align mode experimental".
      긴 few-shot prefix라 구조상 문제없으나 **실동작 검증 필수** (가동 검증 게이트 2번)
+   - 프롬프트 위생: 정확한 토큰 단위 일치가 조건이므로 **가변 요소(타임스탬프, 요청 ID,
+     프레임 파일명, 이미지 메타데이터)를 공통 지시문보다 앞에 두지 말 것.**
+     JSON 직렬화 키 순서도 고정 (한 글자 달라도 그 지점부터 캐시 미스)
 
 보너스:
 
@@ -91,7 +94,10 @@ visual token pruning 논문 직접 통합 · Medusa ·
 
 - **Attention 백엔드**: SM120은 trtllm-gen FMHA cubin 미컴파일 → FlashInfer도 FA2급 폴백.
   `FLASH_ATTN` vs `FLASHINFER` vs `TRITON_ATTN` 실벤치 필수 (5-15% 차이 통상).
-  v0.17의 FA4 통합이 SM120 커버하는지 빌드에서 확인
+  v0.17의 FA4 통합이 SM120 커버하는지 빌드에서 확인.
+  주의: FA-3는 Hopper 전용, FA-4는 H100/B200(SM100) 타겟 최적화(warp specialization,
+  tensor memory, 2-CTA MMA). consumer Blackwell(SM120)은 별개 아키텍처라
+  FA-4 공개 벤치(B200 1613 TFLOPS)를 기대치로 삼지 말고 실제 폴백 백엔드를 기동 로그로 확인
 - **CUDA graphs**: sm_120 full graphs 동작 확인 (enforce-eager 대비 8× 사례).
   `--enforce-eager` 프로덕션 금지.
   FULL_AND_PIECEWISE 캡처 실패 시 `FULL_DECODE_ONLY` (균일한 짧은 decode에 적합)
@@ -115,6 +121,9 @@ visual token pruning 논문 직접 통합 · Medusa ·
 ## 5. Speculative decoding 메뉴
 
 전제: E2E에서 decode는 ~20-30%, 상한은 한 자릿수~20%. 0번 요약의 상위 항목 먼저.
+외부 실측 보강([브리프](research/2026-08-04-brief-modular-handbook.md)): 단일 GPU에서
+동시 20-30부터 throughput 이득 소멸(TPOT만 개선), draft가 KV 풀과 공간 경쟁,
+부하 오를수록 조율 오버헤드 증가. **배치 엔드포인트 적용 금지, 인터랙티브 전용** 판정 확정.
 
 | 방법 | 상태 | 판정 |
 |---|---|---|
@@ -159,7 +168,7 @@ structured output과 spec decode는 V1에서 정합.
 
 ```bash
 # 배치 엔드포인트 - DP 레플리카 (Qwen3.6-35B-A3B NVFP4, GPU당 1개 × N)
-# 컨테이너 레벨에서 UUID 로 핀하므로 CUDA_VISIBLE_DEVICES 는 쓰지 않는다 (docs/04 §2)
+# 컨테이너 레벨에서 UUID 로 핀하므로 CUDA_VISIBLE_DEVICES 는 쓰지 않는다 (docs/04 2번)
 vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
   --served-model-name qwen36-35b-a3b \
   --gpu-memory-utilization 0.93 \            # 0.90 은 기동 실패, 0.95 는 OOM 전멸 이력 (아래)
@@ -183,7 +192,7 @@ vllm serve unsloth/Qwen3.6-35B-A3B-NVFP4 \
 | `--kv-cache-dtype fp8` | 있음 | **제외** | 가동 검증 게이트 1(NVFP4 정확도)과 교락. 게이트 통과 후 별도 A/B |
 | `--limit-mm-per-prompt` | image: 5 | **image: 4** | 단, 4464x2160 프레임은 9.4K 토큰이므로 32K 컨텍스트에는 **실제 3장**까지. few-shot 이미지는 크롭/다운스케일 전제 |
 | `-O3`, `--mm-encoder-tp-mode data`, `cudagraph_mm_encoder` | 있음 | **미적용** | 아직 미검증. 기본 설정으로 먼저 가동선을 확보했다. 최적화 Phase 에서 A/B 대상 |
-| MoE FP4 env (`VLLM_USE_FLASHINFER_MOE_FP4` 등) | — | **불필요** | vLLM 0.24.0 이 FLASHINFER_CUTLASS NvFp4 MoE 백엔드를 자동 선택 (실측) |
+| MoE FP4 env (`VLLM_USE_FLASHINFER_MOE_FP4` 등) | 없음 | **불필요** | vLLM 0.24.0 이 FLASHINFER_CUTLASS NvFp4 MoE 백엔드를 자동 선택 (실측) |
 
 가동 후 용량 실측 (레플리카 1개 = GPU 1장):
 

@@ -9,8 +9,10 @@
 
 ## 추적 지표 (전 단계 공통)
 
-- 성능: TTFT, TPOT/ITL, E2E latency, **images/hour** (비즈니스 지표), tokens/s/GPU
-- 자원: KV-cache 사용률, prefix-cache 히트율, VRAM 헤드룸
+- 성능: TTFT, TPOT/ITL, E2E latency, **images/hour** (비즈니스 지표), tokens/s/GPU.
+  통계는 평균/P50/P95 병기, 최종 판정은 **goodput**(SLO 만족 요청만 센 처리량).
+  워크로드별 우선 지표와 SLO는 [10](10-operations-metrics-and-slo.md)
+- 자원: KV-cache 사용률, prefix-cache 히트율, VRAM 헤드룸, 큐 대기 시간
 - **품질 게이트: 매 단계 frozen 평가셋의 클래스별 F1/κ가 합의된 델타(예: ≤1pt) 이내.**
   깨지면 그 최적화는 불채택
 - 도구: `vllm bench serve`, 엔진 `/metrics`, promptfoo 회귀
@@ -62,7 +64,7 @@ chunked prefill은 V1 기본이라 대개 건드릴 필요 없음.
 
 | # | 실험 | 비고 |
 |---|---|---|
-| 9 | **Speculative decoding** | 1순위 suffix decoding (반복적 JSON에 최적), 2순위 ngram (`prompt_lookup_min≥8`, 버그 #40875), Qwen3.6은 내장 MTP/DFlash. 짧은 JSON + 고동시성 배치에선 이득 축소. **인터랙티브 QA용**. [08 5번](08-optimization-catalog.md#5-speculative-decoding-메뉴) |
+| 9 | **Speculative decoding** | 1순위 suffix decoding (반복적 JSON에 최적), 2순위 ngram (`prompt_lookup_min≥8`, 버그 #40875), Qwen3.6은 내장 MTP/DFlash. 짧은 JSON + 고동시성 배치에선 이득 축소. **인터랙티브 QA용, 배치 엔드포인트 적용 금지** (외부 실측: 동시 20-30부터 throughput 이득 소멸, [브리프](research/2026-08-04-brief-modular-handbook.md)). [08 5번](08-optimization-catalog.md#5-speculative-decoding-메뉴) |
 | 10 | **Vision encoder 분리 (EPD)** | **skip 판정** ([08 2번](08-optimization-catalog.md#2-vlm-특화-기법)). 서버 1대 고정이라 재검토 조건은 "요청당 크롭 4장+ 상시" 워크로드로 바뀔 때뿐 |
 
 ## Phase 4: 조합 + 동결
@@ -80,4 +82,8 @@ chunked prefill은 V1 기본이라 대개 건드릴 필요 없음.
 1. 비용 낮은 것부터: 해상도/캐시가 양자화보다 먼저
 2. 한 번에 한 변수
 3. 품질 게이트 통과 못 하면 불채택. 속도는 품질 안에서만 의미
-4. 모든 런에 설정 태깅 (재현성)
+4. 모든 런에 설정 태깅 (재현성). 단 seed 고정은 재현성 보장이 아니다:
+   버전/커널이 바뀌면 같은 seed도 출력이 다르므로 A/B 판정은 반복 샘플 통계로
+5. **vLLM 버전업 = 성능 변수.** 추론 속도의 천장은 커널 층이 정하고 시스템 튜닝은 커널 비효율을
+   보상하지 못한다. NVFP4 MoE는 신생 커널 경로라 업그레이드마다 Phase 0 베이스라인 재측정
+6. 플래그 변경은 실험 레플리카 A/B → 운영 반영 → 롤백 기준 감시 ([10 4번](10-operations-metrics-and-slo.md#4-플래그-변경과-롤백-기준))

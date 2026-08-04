@@ -42,6 +42,7 @@ DST 라벨 누락 객체 탐지(Bedrock 마이그레이션)를 만드는 프로�
 | [07-inference-optimization-roadmap.md](07-inference-optimization-roadmap.md) | 최적화 실험 로드맵 (Phase 0-4, 실행 순서) |
 | [08-optimization-catalog.md](08-optimization-catalog.md) | 최적화 기법 전체 카탈로그 (SM120 판정표, skip/watch 목록) |
 | [09-stress-test-results.md](09-stress-test-results.md) | **[실측]** 부하 테스트 결과: 처리량 상한, 포화점, DP 효율, 해상도 영향, 병목 판정 |
+| [10-operations-metrics-and-slo.md](10-operations-metrics-and-slo.md) | 운영 지표(goodput, 워크로드별 SLO), 상시 관측 최소 세트, 플래그 변경/롤백 기준, POC 비용 체크리스트 |
 | [research/](research/) | 원본 리서치 브리프 (출처 포함, 수정 금지) |
 | [policy/](policy/) | 정책 문서 보관소: 도메인별 하위 폴더 (현재 [inspection/](policy/inspection/) 수신 대기) |
 | [../samples/](../samples/) | 입력 샘플 이미지 (svnet3 추론 결과 스크린샷 등) |
@@ -53,7 +54,7 @@ DST 라벨 누락 객체 탐지(Bedrock 마이그레이션)를 만드는 프로�
 ## 읽는 순서
 
 - 처음 온 사람: README → 01 → 02
-- 서빙 가동 담당: 04 → 02 → 08 → 09 → `scripts/serve.sh`
+- 서빙 가동 담당: 04 → 02 → 08 → 09 → 10 → `scripts/serve.sh`
 - 서빙 쓰는 사람(dst 등): [../examples/](../examples/) 만 보면 된다
 - 서버 셋업 담당: 05 → 04 → 03
 - agent 구현 담당: 06 → 02 → 07 → 08
