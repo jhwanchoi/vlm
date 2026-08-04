@@ -31,9 +31,9 @@ TTFT 12초짜리 응답도 포함한 값이다. SLO를 정하면 같은 데이�
 
 ## 3. 상시 관측 최소 세트
 
-dcgm-exporter + Prometheus + Grafana([04 5번](04-gpu-pinning-and-serving.md#5-모니터링))는 여전히 권고 상태다.
-그 전까지의 최소 세트는 엔진 `/metrics` 폴링이며, 스크레이프 항목은
-[stress/monitor.sh](../stress/monitor.sh)가 이미 구현했다 (부하 측정용을 상시용으로 재사용).
+**2026-08-04 가동됨**: Prometheus + Grafana + vLLM 공식 대시보드 3종, `http://${STRAD32_IP}:3000`.
+구성과 기동 절차는 [monitoring/](../monitoring/README.md). dcgm-exporter(GPU 지표)는 2차 보류.
+부하 측정 시의 고빈도(1초) 수집은 종전대로 [stress/monitor.sh](../stress/monitor.sh).
 
 | 지표 | 용도 |
 |---|---|

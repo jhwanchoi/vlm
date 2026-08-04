@@ -50,6 +50,7 @@ DST 라벨 누락 객체 탐지(Bedrock 마이그레이션)를 만드는 프로�
 | [../docker/](../docker/) | `Dockerfile` (dmt 사용자 내장 vLLM 파생 이미지) · `nginx-lb.conf` (LB 설정) |
 | [../examples/](../examples/) | 클라이언트 예제: `quickstart.py` · `curl.md` · `prompts.md` · 합성 샘플 생성 |
 | [../stress/](../stress/) | Locust 부하 테스트 하네스 (몫 preflight, 자동 중단 가드, 집계) |
+| [../monitoring/](../monitoring/) | **[가동 중]** Prometheus + Grafana 상시 관측 (설정 파일, 기동 절차, vLLM 공식 대시보드) |
 
 ## 읽는 순서
 

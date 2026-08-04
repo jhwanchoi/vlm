@@ -1,0 +1,17 @@
+# strad32 vLLM 관측 (docs/10 최소 세트)
+# 대상: 운영 레플리카 4대 엔진 /metrics. dcgm(GPU 지표)은 2차로 보류.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: vllm
+    static_configs:
+      - targets: ['localhost:8001']
+        labels: { replica: r0 }
+      - targets: ['localhost:8002']
+        labels: { replica: r1 }
+      - targets: ['localhost:8003']
+        labels: { replica: r2 }
+      - targets: ['localhost:8004']
+        labels: { replica: r3 }
