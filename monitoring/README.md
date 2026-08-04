@@ -8,6 +8,9 @@
 - 스크레이프: 운영 레플리카 4대(:8001-8004) 엔진 `/metrics`, 15초 간격, 보존 15일
 - dcgm-exporter(GPU 지표)는 2차 보류 ([docs/04 5번](../docs/04-gpu-pinning-and-serving.md#5-모니터링)).
   엔진 지표가 판단 규칙의 1순위라서다
+- **Grafana 버전은 12.1.1 고정.** 13.0.2(latest)는 대시보드를 신규 v2 API로 로드하면서
+  legacy 스키마 패널을 전부 빈 화면으로 렌더하는 버그가 있었다(2026-08-04 실확인,
+  자작/공식 대시보드 모두 재현). 올리기 전에 실렌더 확인 필수
 
 ## 구성 파일
 
@@ -16,7 +19,8 @@
 | `prometheus.yml` | 스크레이프 대상 (레플리카 증감 시 여기 수정 후 vlm-prom 재기동) |
 | `provisioning/datasources/prometheus.yml` | Grafana 데이터소스 (uid `prometheus` 고정) |
 | `provisioning/dashboards/vllm.yml` | 대시보드 자동 로드 설정 |
-| `dashboards/*.json` | vLLM 공식 대시보드 3종 (upstream `examples/observability/`에서 가져와 `${DS_PROMETHEUS}` -> `prometheus` 치환. 경로가 자주 바뀌어 vendor함) |
+| `dashboards/vlm-ops.json` | **자작 운영 대시보드 "VLM 운영 한눈에"** (docs/09 실측 + docs/10 판단 규칙을 임계값/설명으로 내장. 상단 타일 전부 초록 = 정상) |
+| `dashboards/vllm*.json` | vLLM 공식 대시보드 3종 (upstream `examples/observability/`에서 가져와 `${DS_PROMETHEUS}` -> `prometheus` 치환. 경로가 자주 바뀌어 vendor함) |
 
 ## 기동 (strad32, dmt 계정)
 
@@ -38,7 +42,7 @@ docker run -d --name vlm-grafana --network host --restart unless-stopped \
   -v /data01/dmt/monitoring/provisioning:/etc/grafana/provisioning:ro \
   -v /data01/dmt/monitoring/dashboards:/var/lib/grafana/dashboards:ro \
   -v /data01/dmt/monitoring/grafana-data:/var/lib/grafana \
-  grafana/grafana-oss:latest
+  grafana/grafana-oss:12.1.1
 ```
 
 - cpuset/RAM 상한은 dst+dmt 몫 규칙([docs/05](../docs/05-strad32-team-resource-split.md)) 준수 (각 1g, 합 2g)

@@ -1,0 +1,327 @@
+{
+  "uid": "vlm-ops",
+  "title": "VLM 운영 한눈에",
+  "description": "docs/10 판단 규칙 기반 운영 대시보드. 상단 타일이 전부 초록이면 정상. 임계값 근거: docs/09 실측 + docs/10 SLO 제안.",
+  "tags": ["vlm", "ops"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": { "from": "now-3h", "to": "now" },
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "type": "row", "title": "지금 상태", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "panels": []
+    },
+    {
+      "type": "stat", "title": "서빙 레플리카", "id": 1,
+      "description": "정상 = 4. 하나라도 빠지면 즉시 확인 (serve.sh status).",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "targets": [{ "expr": "count(up{job=\"vllm\"} == 1) OR on() vector(0)", "refId": "A", "instant": false }],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "min": 0, "max": 4, "noValue": "0",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "red", "value": null }, { "color": "green", "value": 4 } ] }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value", "textMode": "value", "justifyMode": "center" }
+    },
+    {
+      "type": "stat", "title": "처리 중 요청", "id": 2,
+      "description": "슬롯 상한 64 (max-num-seqs 16 x 4). 상한 근처 지속 = 대기 큐 발생 직전.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "targets": [{ "expr": "sum(vllm:num_requests_running)", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "noValue": "0",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "yellow", "value": 48 }, { "color": "red", "value": 64 } ] }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" }
+    },
+    {
+      "type": "stat", "title": "대기 큐", "id": 3,
+      "description": "0이 정상. 지속적으로 0 초과 = 용량 부족, DP 증설 판단 신호 (docs/10 3번).",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "targets": [{ "expr": "sum(vllm:num_requests_waiting)", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "noValue": "0",
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" }
+    },
+    {
+      "type": "stat", "title": "큐 대기 p95 (5분)", "id": 4,
+      "description": "요청이 스케줄러에 잡히기까지 기다린 시간. 레플리카 열화/용량 부족의 최선행 신호.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:request_queue_time_seconds_bucket[5m])))", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "unit": "s", "noValue": "요청 없음", "decimals": 2,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" }
+    },
+    {
+      "type": "stat", "title": "TTFT p95 (5분)", "id": 5,
+      "description": "인터랙티브 SLO 제안: p95 7초 이내 (docs/10 2번). 배치 전용 구간에서는 초과해도 무방.",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 5 },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "unit": "s", "noValue": "요청 없음", "decimals": 1,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 7 } ] }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" }
+    },
+    {
+      "type": "stat", "title": "출력 처리량 (tok/s)", "id": 6,
+      "description": "실측 상한 약 1,508 tok/s (DP=4, docs/09). 색 없음: 판정 지표가 아니라 참고 지표.",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 5 },
+      "targets": [{ "expr": "sum(rate(vllm:generation_tokens_total[1m]))", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "noValue": "0", "decimals": 0,
+        "color": { "mode": "fixed", "fixedColor": "#0072B2" }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" }
+    },
+    {
+      "type": "stat", "title": "KV 사용률 (최대 레플리카)", "id": 7,
+      "description": "부하 실측 최대 64% (docs/09 6번). 90% 초과 + preemption 발생 = 메모리 병목.",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 5 },
+      "targets": [{ "expr": "max(vllm:kv_cache_usage_perc)", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "unit": "percentunit", "noValue": "0", "min": 0, "max": 1, "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 } ] }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" }
+    },
+    {
+      "type": "stat", "title": "Preemption (1시간)", "id": 8,
+      "description": "0이 정상 기대값 (docs/10 3번). 발생 = KV 압박, gpu-memory-utilization/max-num-seqs 재검토.",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 5 },
+      "targets": [{ "expr": "sum(increase(vllm:num_preemptions_total[1h]))", "refId": "A" }],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "noValue": "0", "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 20 } ] }
+      }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" }
+    },
+    {
+      "type": "row", "title": "지연 (SLO)", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }, "panels": []
+    },
+    {
+      "type": "timeseries", "title": "TTFT (첫 토큰까지)", "id": 10,
+      "description": "빨간 점선 = 인터랙티브 SLO 제안 7초. 배치 부하 중 초과는 정상.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "s", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true,
+          "thresholdsStyle": { "mode": "line" } },
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "transparent", "value": null }, { "color": "red", "value": 7 } ] }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#85B8DC" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "E2E (요청 전체 완료)", "id": 11,
+      "description": "tool calling agent 체감 지표 (docs/10 2번: agent는 TTFT가 아니라 E2E로 판정).",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "s", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#85B8DC" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "TPOT (출력 토큰당 시간)", "id": 12,
+      "description": "decode 속도. 동시성을 올리면 함께 오르는 것이 정상. 급등은 병목 신호.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:request_time_per_output_token_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:request_time_per_output_token_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "s", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#85B8DC" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "row", "title": "처리량", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }, "panels": []
+    },
+    {
+      "type": "timeseries", "title": "토큰 처리량 (tok/s)", "id": 20,
+      "description": "입력에는 vision 토큰 포함. 입력이 출력보다 훨씬 큰 것이 이 워크로드의 정상 (prefill-dominated).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "targets": [
+        { "expr": "sum(rate(vllm:generation_tokens_total[2m]))", "legendFormat": "출력", "refId": "A" },
+        { "expr": "sum(rate(vllm:prompt_tokens_total[2m]))", "legendFormat": "입력", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "출력" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "입력" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "요청 처리율 (레플리카별 RPS)", "id": 21,
+      "description": "네 줄이 비슷하면 LB 분배 정상. 한 줄만 낮으면 해당 레플리카 열화 의심.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "targets": [
+        { "expr": "sum by (replica) (rate(vllm:request_success_total[5m]))", "legendFormat": "{{replica}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "r0" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "r1" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+        { "matcher": { "id": "byName", "options": "r2" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+        { "matcher": { "id": "byName", "options": "r3" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#9B59B6" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "row", "title": "레플리카별 병목 진단", "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 }, "panels": []
+    },
+    {
+      "type": "timeseries", "title": "처리 중 요청 (레플리카별)", "id": 30,
+      "description": "빨간 점선 = 레플리카당 슬롯 상한 16 (max-num-seqs). 상한 도달 = 슬롯 병목 (docs/09 6번).",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 28 },
+      "targets": [
+        { "expr": "vllm:num_requests_running", "legendFormat": "{{replica}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true,
+          "thresholdsStyle": { "mode": "line" } },
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "transparent", "value": null }, { "color": "red", "value": 16 } ] }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "r0" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "r1" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+        { "matcher": { "id": "byName", "options": "r2" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+        { "matcher": { "id": "byName", "options": "r3" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#9B59B6" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "대기 요청 (레플리카별)", "id": 31,
+      "description": "0이 정상. 쌓이면 슬롯 초과분이 큐잉되는 중 (처리량은 늘지 않고 TTFT만 증가).",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 28 },
+      "targets": [
+        { "expr": "vllm:num_requests_waiting", "legendFormat": "{{replica}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "r0" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "r1" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+        { "matcher": { "id": "byName", "options": "r2" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+        { "matcher": { "id": "byName", "options": "r3" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#9B59B6" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "KV 사용률 (레플리카별)", "id": 32,
+      "description": "빨간 점선 90%. 초과 + preemption 동반 = 메모리 병목. 부하 실측 최대 64%.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 28 },
+      "targets": [
+        { "expr": "vllm:kv_cache_usage_perc", "legendFormat": "{{replica}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "percentunit", "min": 0, "max": 1,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true,
+          "thresholdsStyle": { "mode": "line" } },
+        "thresholds": { "mode": "absolute", "steps": [
+          { "color": "transparent", "value": null }, { "color": "red", "value": 0.9 } ] }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "r0" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "r1" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+        { "matcher": { "id": "byName", "options": "r2" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+        { "matcher": { "id": "byName", "options": "r3" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#9B59B6" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Preemption 발생 (10분 증가량)", "id": 33,
+      "description": "0이 정상 기대값. 발생 시 KV 압박: seqs 32 A/B에서 0.5% 관측된 그 지표 (docs/09 6-1).",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 36 },
+      "targets": [
+        { "expr": "increase(vllm:num_preemptions_total[10m])", "legendFormat": "{{replica}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "r0" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "r1" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+        { "matcher": { "id": "byName", "options": "r2" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+        { "matcher": { "id": "byName", "options": "r3" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#9B59B6" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "Prefix cache 적중률 (레플리카별)", "id": 34,
+      "description": "가동 검증 게이트 2 (Mamba prefix caching) 검증 전까지 0이 정상. 켜진 뒤 few-shot 절감 효과를 여기서 확인.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 36 },
+      "targets": [
+        { "expr": "sum by (replica) (rate(vllm:prefix_cache_hits_total[5m])) / sum by (replica) (rate(vllm:prefix_cache_queries_total[5m]))", "legendFormat": "{{replica}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "percentunit", "min": 0, "max": 1, "noValue": "비활성 (게이트 2)",
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "r0" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "r1" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+        { "matcher": { "id": "byName", "options": "r2" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+        { "matcher": { "id": "byName", "options": "r3" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#9B59B6" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "type": "timeseries", "title": "요청당 출력 토큰 p95", "id": 35,
+      "description": "출력 스키마 다이어트 추적용 (docs/08 6번: 200에서 120 토큰 = decode 1.7배 절감).",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 36 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(vllm:request_generation_tokens_bucket[5m])))", "legendFormat": "p95", "refId": "A" },
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(vllm:request_generation_tokens_bucket[5m])))", "legendFormat": "p50", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": {
+        "unit": "none", "min": 0,
+        "custom": { "lineWidth": 2, "fillOpacity": 0, "showPoints": "never", "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+        { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#85B8DC" } }] }
+      ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}
